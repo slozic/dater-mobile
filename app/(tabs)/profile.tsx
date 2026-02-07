@@ -1,17 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Button,
+  Image,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { clearToken, fetchProfile, updateProfile, UserProfile } from '@/lib/api';
+import * as ImagePicker from 'expo-image-picker';
+import {
+  clearToken,
+  deleteProfileImage,
+  fetchProfile,
+  fetchProfileImages,
+  updateProfile,
+  uploadProfileImages,
+  UserProfile,
+} from '@/lib/api';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -26,13 +36,15 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [images, setImages] = useState<Array<{ id: string; imageUrl: string | null }>>([]);
 
   const loadProfile = async () => {
     setError('');
     setLoading(true);
     try {
-      const data = await fetchProfile();
+      const [data, profileImages] = await Promise.all([fetchProfile(), fetchProfileImages()]);
       setProfile(data);
+      setImages(profileImages);
       setFormState({
         firstName: data.firstName ?? '',
         lastName: data.lastName ?? '',
@@ -40,6 +52,10 @@ export default function ProfileScreen() {
         birthday: data.birthday ?? '',
       });
     } catch (err) {
+      if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
+        router.replace('/(tabs)');
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to load profile.');
     } finally {
       setLoading(false);
@@ -49,6 +65,12 @@ export default function ProfileScreen() {
   useEffect(() => {
     loadProfile();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, []),
+  );
 
   const handleSave = async () => {
     setError('');
@@ -61,6 +83,41 @@ export default function ProfileScreen() {
       setError(err instanceof Error ? err.message : 'Failed to update profile.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePickProfileImages = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') {
+      setError('Media library permission is required to upload images.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsMultipleSelection: true,
+      ...(ImagePicker.MediaType?.Images ? { mediaTypes: [ImagePicker.MediaType.Images] } : {}),
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+    const files = result.assets.map((asset) => ({
+      uri: asset.uri,
+      type: asset.mimeType ?? 'image/jpeg',
+      name: asset.fileName ?? `profile-${Date.now()}.jpg`,
+    }));
+    try {
+      await uploadProfileImages(files);
+      const updated = await fetchProfileImages();
+      setImages(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload profile images.');
+    }
+  };
+
+  const handleDeleteProfileImage = async (imageId: string) => {
+    try {
+      await deleteProfileImage(imageId);
+      setImages((prev) => prev.filter((img) => img.id !== imageId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete image.');
     }
   };
 
@@ -90,6 +147,30 @@ export default function ProfileScreen() {
             </View>
           </View>
         ) : null}
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Profile photos</Text>
+          <View style={styles.imageRow}>
+            {images.length === 0 ? <Text style={styles.value}>No photos yet.</Text> : null}
+            {images.map((img) => (
+              <View key={img.id} style={styles.imageWrap}>
+                {img.imageUrl ? (
+                  <Image source={{ uri: img.imageUrl }} style={styles.image} />
+                ) : (
+                  <View style={styles.imageFallback}>
+                    <Text style={styles.imageFallbackText}>No image</Text>
+                  </View>
+                )}
+                <Pressable onPress={() => handleDeleteProfileImage(img.id)}>
+                  <Text style={styles.deleteText}>Delete</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+          <Pressable style={styles.primaryButton} onPress={handlePickProfileImages}>
+            <Text style={styles.primaryButtonText}>Upload photos</Text>
+          </Pressable>
+        </View>
 
         {profile && editing ? (
           <View style={styles.form}>
@@ -185,6 +266,43 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontWeight: '600',
     color: '#6b6b73',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#1b1b1f',
+  },
+  imageRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  imageWrap: {
+    width: 90,
+  },
+  image: {
+    width: 90,
+    height: 90,
+    borderRadius: 10,
+    backgroundColor: '#eee',
+  },
+  imageFallback: {
+    width: 90,
+    height: 90,
+    borderRadius: 10,
+    backgroundColor: '#eee',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageFallbackText: {
+    color: '#6b6b73',
+    fontSize: 12,
+  },
+  deleteText: {
+    color: '#c1121f',
+    marginTop: 6,
+    fontSize: 12,
   },
   value: {
     color: '#1b1b1f',

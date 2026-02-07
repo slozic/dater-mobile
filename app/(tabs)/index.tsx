@@ -1,13 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import LoginForm from '@/components/LoginForm';
@@ -27,6 +20,11 @@ export default function DatesScreen() {
       const data = await fetchDates('all');
       setDates(data);
     } catch (err) {
+      if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
+        setToken(null);
+        setError('');
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to load dates.');
     } finally {
       setLoading(false);

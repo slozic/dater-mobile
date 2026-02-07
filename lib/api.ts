@@ -35,6 +35,43 @@ export async function login(username: string, password: string): Promise<string>
   return token;
 }
 
+async function withAuthFetch(path: string, options: RequestInit = {}) {
+  const token = await getToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      Authorization: token ?? '',
+      ...(options.headers ?? {}),
+    },
+  });
+
+  if (response.status === 401) {
+    await clearToken();
+    throw new Error('AUTH_EXPIRED');
+  }
+
+  return response;
+}
+
+export async function registerUser(payload: {
+  firstName: string;
+  lastName: string;
+  username: string;
+  password: string;
+  email: string;
+  birthday?: string;
+}): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/users/registration`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to register.');
+  }
+}
+
 export type DateListItem = {
   id: string;
   title: string;
@@ -44,10 +81,7 @@ export type DateListItem = {
 };
 
 export async function fetchDates(filter = 'all'): Promise<DateListItem[]> {
-  const token = await getToken();
-  const response = await fetch(`${API_BASE_URL}/dates?filter=${filter}`, {
-    headers: { Authorization: token ?? '' },
-  });
+  const response = await withAuthFetch(`/dates?filter=${filter}`);
 
   if (!response.ok) {
     throw new Error('Failed to load dates.');
@@ -64,13 +98,11 @@ export type DateDetails = {
   description: string;
   scheduledTime: string;
   dateOwner: string;
+  dateOwnerId: string;
 };
 
 export async function fetchDateById(id: string): Promise<DateDetails> {
-  const token = await getToken();
-  const response = await fetch(`${API_BASE_URL}/dates/${id}`, {
-    headers: { Authorization: token ?? '' },
-  });
+  const response = await withAuthFetch(`/dates/${id}`);
 
   if (!response.ok) {
     throw new Error('Failed to load date.');
@@ -85,11 +117,9 @@ export async function createDate(payload: {
   description: string;
   scheduledTime: string;
 }): Promise<string> {
-  const token = await getToken();
-  const response = await fetch(`${API_BASE_URL}/dates`, {
+  const response = await withAuthFetch('/dates', {
     method: 'POST',
     headers: {
-      Authorization: token ?? '',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
@@ -113,10 +143,7 @@ export type UserProfile = {
 };
 
 export async function fetchProfile(): Promise<UserProfile> {
-  const token = await getToken();
-  const response = await fetch(`${API_BASE_URL}/users`, {
-    headers: { Authorization: token ?? '' },
-  });
+  const response = await withAuthFetch('/users');
 
   if (!response.ok) {
     throw new Error('Failed to load profile.');
@@ -131,11 +158,9 @@ export async function updateProfile(payload: {
   username?: string;
   birthday?: string;
 }): Promise<UserProfile> {
-  const token = await getToken();
-  const response = await fetch(`${API_BASE_URL}/users/profile`, {
+  const response = await withAuthFetch('/users/profile', {
     method: 'PUT',
     headers: {
-      Authorization: token ?? '',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
@@ -146,4 +171,165 @@ export async function updateProfile(payload: {
   }
 
   return response.json();
+}
+
+export type DateImage = {
+  id: string;
+  imageUrl: string | null;
+  errorMessage?: string | null;
+};
+
+export async function fetchDateImages(dateId: string): Promise<DateImage[]> {
+  const response = await withAuthFetch(`/dates/${dateId}/images`);
+
+  if (!response.ok) {
+    throw new Error('Failed to load date images.');
+  }
+
+  const data = await response.json();
+  return data.dateImageData ?? [];
+}
+
+export async function uploadDateImages(dateId: string, images: Array<{ uri: string; type: string; name: string }>) {
+  const formData = new FormData();
+  images.forEach((img) => {
+    formData.append('files', {
+      uri: img.uri,
+      type: img.type,
+      name: img.name,
+    } as unknown as Blob);
+  });
+
+  const response = await withAuthFetch(`/dates/${dateId}/images`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to upload date images.');
+  }
+}
+
+export async function deleteDateImage(dateId: string, imageId: string) {
+  const response = await withAuthFetch(`/dates/${dateId}/images/${imageId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to delete date image.');
+  }
+}
+
+export type ProfileImage = {
+  id: string;
+  imageUrl: string | null;
+  errorMessage?: string | null;
+};
+
+export async function fetchProfileImages(): Promise<ProfileImage[]> {
+  const response = await withAuthFetch('/users/images');
+
+  if (!response.ok) {
+    throw new Error('Failed to load profile images.');
+  }
+
+  const data = await response.json();
+  return data.profileImageData ?? [];
+}
+
+export async function uploadProfileImages(images: Array<{ uri: string; type: string; name: string }>) {
+  const formData = new FormData();
+  images.forEach((img) => {
+    formData.append('files', {
+      uri: img.uri,
+      type: img.type,
+      name: img.name,
+    } as unknown as Blob);
+  });
+
+  const response = await withAuthFetch('/users/images', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to upload profile images.');
+  }
+}
+
+export async function deleteProfileImage(imageId: string) {
+  const response = await withAuthFetch(`/users/images/${imageId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to delete profile image.');
+  }
+}
+
+export type AttendeeRequest = {
+  id: string;
+  username: string;
+  status: 'ON_WAITLIST' | 'ACCEPTED' | 'REJECTED' | 'NOT_REQUESTED';
+};
+
+export async function fetchAttendeeStatus(dateId: string) {
+  const response = await withAuthFetch(`/dates/${dateId}/attendees/status`);
+
+  if (!response.ok) {
+    throw new Error('Failed to load attendee status.');
+  }
+
+  return response.json();
+}
+
+export async function requestToJoinDate(dateId: string) {
+  const response = await withAuthFetch(`/dates/${dateId}/attendees`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to request to join.');
+  }
+}
+
+export async function cancelJoinRequest(dateId: string) {
+  const response = await withAuthFetch(`/dates/${dateId}/attendees/me`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to cancel request.');
+  }
+}
+
+export async function fetchAttendeeRequests(dateId: string): Promise<AttendeeRequest[]> {
+  const response = await withAuthFetch(`/dates/${dateId}/attendees`);
+
+  if (!response.ok) {
+    throw new Error('Failed to load attendee requests.');
+  }
+
+  const data = await response.json();
+  return data.dateAttendees ?? [];
+}
+
+export async function acceptAttendee(dateId: string, userId: string) {
+  const response = await withAuthFetch(`/dates/${dateId}/attendees/${userId}`, {
+    method: 'PUT',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to accept attendee.');
+  }
+}
+
+export async function rejectAttendee(dateId: string, userId: string) {
+  const response = await withAuthFetch(`/dates/${dateId}/attendees/${userId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to reject attendee.');
+  }
 }

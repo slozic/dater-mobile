@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { login } from '@/lib/api';
 
 type Props = {
@@ -7,6 +8,7 @@ type Props = {
 };
 
 export default function LoginForm({ onSuccess }: Props) {
+  const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -49,8 +51,13 @@ export default function LoginForm({ onSuccess }: Props) {
       {isLoggingIn ? (
         <ActivityIndicator />
       ) : (
-        <Button title="Login" onPress={handleLogin} disabled={!username || !password} />
+        <Pressable style={styles.primaryButton} onPress={handleLogin} disabled={!username || !password}>
+          <Text style={styles.primaryButtonText}>Login</Text>
+        </Pressable>
       )}
+      <Pressable style={styles.secondaryButton} onPress={() => router.push('/auth/register')}>
+        <Text style={styles.secondaryButtonText}>Create account</Text>
+      </Pressable>
     </View>
   );
 }
@@ -76,6 +83,26 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#7a7a86',
     marginTop: -6,
+  },
+  primaryButton: {
+    backgroundColor: '#ff5c8a',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    backgroundColor: '#f0f0f4',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#1b1b1f',
+    fontWeight: '600',
   },
   input: {
     borderWidth: 1,
