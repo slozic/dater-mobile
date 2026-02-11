@@ -1,17 +1,33 @@
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { API_BASE_URL } from './config';
 
 const TOKEN_KEY = 'dater_token';
 
 export async function getToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
+  }
   return SecureStore.getItemAsync(TOKEN_KEY);
 }
 
 export async function setToken(token: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(TOKEN_KEY, token);
+    }
+    return;
+  }
   await SecureStore.setItemAsync(TOKEN_KEY, token);
 }
 
 export async function clearToken(): Promise<void> {
+  if (Platform.OS === 'web') {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+    return;
+  }
   await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
 
@@ -45,7 +61,7 @@ async function withAuthFetch(path: string, options: RequestInit = {}) {
     },
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 || response.status === 403) {
     await clearToken();
     throw new Error('AUTH_EXPIRED');
   }
@@ -226,6 +242,13 @@ export type ProfileImage = {
   errorMessage?: string | null;
 };
 
+export type PublicProfile = {
+  username: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  profileImageData?: ProfileImage[];
+};
+
 export async function fetchProfileImages(): Promise<ProfileImage[]> {
   const response = await withAuthFetch('/users/images');
 
@@ -235,6 +258,16 @@ export async function fetchProfileImages(): Promise<ProfileImage[]> {
 
   const data = await response.json();
   return data.profileImageData ?? [];
+}
+
+export async function fetchPublicProfile(userId: string): Promise<PublicProfile> {
+  const response = await withAuthFetch(`/users/${userId}/public-profile`);
+
+  if (!response.ok) {
+    throw new Error('Failed to load public profile.');
+  }
+
+  return response.json();
 }
 
 export async function uploadProfileImages(images: Array<{ uri: string; type: string; name: string }>) {

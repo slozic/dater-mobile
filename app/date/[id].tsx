@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -28,6 +28,8 @@ export default function DateDetailsScreen() {
   const [images, setImages] = useState<DateImage[]>([]);
   const [requests, setRequests] = useState<AttendeeRequest[]>([]);
   const [joinStatus, setJoinStatus] = useState<string>('NOT_REQUESTED');
+  const [showWaitlist, setShowWaitlist] = useState(false);
+  const [actionMessage, setActionMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -76,11 +78,15 @@ export default function DateDetailsScreen() {
       setError('Media library permission is required to upload images.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const picker = ImagePicker as unknown as { MediaType?: { Images?: unknown } };
+    const options: Record<string, unknown> = {
       allowsMultipleSelection: true,
-      ...(ImagePicker.MediaType?.Images ? { mediaTypes: [ImagePicker.MediaType.Images] } : {}),
       quality: 0.8,
-    });
+    };
+    if (picker.MediaType?.Images) {
+      options.mediaTypes = [picker.MediaType.Images];
+    }
+    const result = await ImagePicker.launchImageLibraryAsync(options as any);
     if (result.canceled) return;
     const files = result.assets.map((asset) => ({
       uri: asset.uri,
@@ -112,8 +118,25 @@ export default function DateDetailsScreen() {
       await requestToJoinDate(id);
       const status = await fetchAttendeeStatus(id);
       setJoinStatus(status.joinDateStatus ?? 'ON_WAITLIST');
+      setActionMessage('Join request sent.');
+      Alert.alert('Request sent', 'You are now on the waitlist.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to request.');
+    }
+  };
+
+  const formatStatus = (status: string) => status.replace(/_/g, ' ').toLowerCase();
+
+  const badgeStyle = (status: string) => {
+    switch (status) {
+      case 'ACCEPTED':
+        return { backgroundColor: '#e8f5e9' };
+      case 'REJECTED':
+        return { backgroundColor: '#ffebee' };
+      case 'ON_WAITLIST':
+        return { backgroundColor: '#fff3e0' };
+      default:
+        return { backgroundColor: '#e9e9ef' };
     }
   };
 
@@ -123,6 +146,8 @@ export default function DateDetailsScreen() {
       await cancelJoinRequest(id);
       const status = await fetchAttendeeStatus(id);
       setJoinStatus(status.joinDateStatus ?? 'NOT_REQUESTED');
+      setActionMessage('Request canceled.');
+      Alert.alert('Request canceled', 'Your request has been removed.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel request.');
     }
@@ -133,6 +158,8 @@ export default function DateDetailsScreen() {
     await acceptAttendee(id, userId);
     const updated = await fetchAttendeeRequests(id);
     setRequests(updated);
+    setActionMessage('Request accepted.');
+    Alert.alert('Request accepted', 'You accepted this attendee.');
   };
 
   const handleReject = async (userId: string) => {
@@ -140,6 +167,22 @@ export default function DateDetailsScreen() {
     await rejectAttendee(id, userId);
     const updated = await fetchAttendeeRequests(id);
     setRequests(updated);
+    setActionMessage('Request rejected.');
+    Alert.alert('Request rejected', 'You rejected this attendee.');
+  };
+
+  const confirmAccept = (userId: string) => {
+    Alert.alert('Accept request?', 'This will accept this attendee.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Accept', onPress: () => handleAccept(userId) },
+    ]);
+  };
+
+  const confirmReject = (userId: string) => {
+    Alert.alert('Reject request?', 'This will reject this attendee.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Reject', style: 'destructive', onPress: () => handleReject(userId) },
+    ]);
   };
 
   return (
@@ -157,6 +200,8 @@ export default function DateDetailsScreen() {
           <Text style={styles.value}>{date.scheduledTime}</Text>
           <Text style={styles.label}>Creator</Text>
           <Text style={styles.value}>{date.dateOwner}</Text>
+
+          {actionMessage ? <Text style={styles.notice}>{actionMessage}</Text> : null}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Images</Text>
@@ -185,38 +230,99 @@ export default function DateDetailsScreen() {
             ) : null}
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Join status</Text>
-            <Text style={styles.value}>{joinStatus}</Text>
-            {joinStatus === 'NOT_REQUESTED' ? (
-              <Pressable style={styles.primaryButton} onPress={handleRequestJoin}>
-                <Text style={styles.primaryButtonText}>Request to join</Text>
-              </Pressable>
-            ) : null}
-            {joinStatus === 'ON_WAITLIST' ? (
-              <Pressable style={styles.secondaryButton} onPress={handleCancelJoin}>
-                <Text style={styles.secondaryButtonText}>Cancel request</Text>
-              </Pressable>
-            ) : null}
-          </View>
+          {date.dateOwnerId !== currentUserId ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Join status</Text>
+              <View style={styles.statusRow}>
+                <View style={[styles.statusBadge, badgeStyle(joinStatus)]}>
+                  <Text style={styles.statusBadgeText}>{formatStatus(joinStatus)}</Text>
+                </View>
+              </View>
+              {joinStatus === 'NOT_REQUESTED' ? (
+                <Pressable style={styles.primaryButton} onPress={handleRequestJoin}>
+                  <Text style={styles.primaryButtonText}>Request to join</Text>
+                </Pressable>
+              ) : null}
+              {joinStatus === 'ON_WAITLIST' ? (
+                <Pressable style={styles.secondaryButton} onPress={handleCancelJoin}>
+                  <Text style={styles.secondaryButtonText}>Cancel request</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
 
           {date.dateOwnerId === currentUserId ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Requests</Text>
               {requests.length === 0 ? <Text style={styles.value}>No requests yet.</Text> : null}
-              {requests.map((req) => (
-                <View key={req.id} style={styles.requestRow}>
-                  <Text style={styles.value}>{req.username}</Text>
-                  <View style={styles.requestActions}>
-                    <Pressable onPress={() => handleAccept(req.id)}>
-                      <Text style={styles.acceptText}>Accept</Text>
+              {(() => {
+                const accepted = requests.find((req) => req.status === 'ACCEPTED');
+                const waitlist = requests.filter((req) => req.status === 'ON_WAITLIST');
+                return (
+                  <View style={styles.requestSection}>
+                    <Text style={styles.requestSubtitle}>Accepted</Text>
+                    {accepted ? (
+                      <View style={styles.requestRow}>
+                        <View style={styles.requestInfo}>
+                          <View style={styles.avatarCircle}>
+                            <Text style={styles.avatarText}>{accepted.username?.[0]?.toUpperCase() ?? '?'}</Text>
+                          </View>
+                          <Text style={styles.requestName}>{accepted.username}</Text>
+                        </View>
+                        <View style={styles.requestActions}>
+                          <Text style={styles.acceptedBadge}>Accepted</Text>
+                          <Pressable style={styles.rejectButton} onPress={() => confirmReject(accepted.id)}>
+                            <Text style={styles.rejectButtonText}>Reject</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={styles.value}>No accepted attendee yet.</Text>
+                    )}
+
+                    <Pressable style={styles.toggleButton} onPress={() => setShowWaitlist((prev) => !prev)}>
+                      <Text style={styles.toggleButtonText}>
+                        {showWaitlist ? 'Hide waitlist' : `Show waitlist (${waitlist.length})`}
+                      </Text>
                     </Pressable>
-                    <Pressable onPress={() => handleReject(req.id)}>
-                      <Text style={styles.rejectText}>Reject</Text>
-                    </Pressable>
+                    {showWaitlist
+                      ? waitlist.map((req) => (
+                          <View key={req.id} style={styles.requestRow}>
+                                <Pressable
+                                  style={styles.requestInfo}
+                                  onPress={() => router.push({ pathname: '/user/[id]', params: { id: req.id } })}
+                                  hitSlop={8}
+                                >
+                                  <View style={styles.avatarCircle}>
+                                    <Text style={styles.avatarText}>{req.username?.[0]?.toUpperCase() ?? '?'}</Text>
+                                  </View>
+                                  <Text style={styles.requestName}>{req.username}</Text>
+                                </Pressable>
+                            <View style={styles.requestActions}>
+                              <Pressable
+                                    style={styles.acceptButton}
+                                    onPress={() => confirmAccept(req.id)}
+                                disabled={Boolean(accepted && accepted.id !== req.id)}
+                              >
+                                <Text
+                                  style={[
+                                        styles.acceptButtonText,
+                                    accepted && accepted.id !== req.id ? styles.disabledText : undefined,
+                                  ]}
+                                >
+                                  Accept
+                                </Text>
+                              </Pressable>
+                                  <Pressable style={styles.rejectButton} onPress={() => confirmReject(req.id)}>
+                                    <Text style={styles.rejectButtonText}>Reject</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ))
+                      : null}
                   </View>
-                </View>
-              ))}
+                );
+              })()}
             </View>
           ) : null}
         </View>
@@ -260,6 +366,22 @@ const styles = StyleSheet.create({
   value: {
     color: '#1b1b1f',
   },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: '#e9e9ef',
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1b1b1f',
+  },
   section: {
     marginTop: 16,
   },
@@ -268,6 +390,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
     color: '#1b1b1f',
+  },
+  notice: {
+    marginTop: 8,
+    color: '#2e7d32',
+    fontWeight: '600',
   },
   imageRow: {
     flexDirection: 'row',
@@ -332,12 +459,70 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
-  acceptText: {
+  requestInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatarCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#f0f0f4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontWeight: '700',
+    color: '#1b1b1f',
+  },
+  requestName: {
+    color: '#1b1b1f',
+    fontWeight: '600',
+  },
+  acceptButton: {
+    backgroundColor: '#e8f5e9',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  acceptButtonText: {
     color: '#2e7d32',
     fontWeight: '600',
   },
-  rejectText: {
+  rejectButton: {
+    backgroundColor: '#ffebee',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  rejectButtonText: {
     color: '#c1121f',
+    fontWeight: '600',
+  },
+  disabledText: {
+    color: '#b0b0b8',
+  },
+  requestSection: {
+    gap: 8,
+  },
+  requestSubtitle: {
+    fontWeight: '600',
+    color: '#6b6b73',
+  },
+  acceptedBadge: {
+    color: '#2e7d32',
+    fontWeight: '700',
+  },
+  toggleButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#f0f0f4',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  toggleButtonText: {
+    color: '#1b1b1f',
     fontWeight: '600',
   },
 });

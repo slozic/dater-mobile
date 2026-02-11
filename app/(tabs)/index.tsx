@@ -22,6 +22,7 @@ export default function DatesScreen() {
     } catch (err) {
       if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
         setToken(null);
+        setDates([]);
         setError('');
         return;
       }

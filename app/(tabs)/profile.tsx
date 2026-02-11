@@ -92,11 +92,15 @@ export default function ProfileScreen() {
       setError('Media library permission is required to upload images.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const picker = ImagePicker as unknown as { MediaType?: { Images?: unknown } };
+    const options: Record<string, unknown> = {
       allowsMultipleSelection: true,
-      ...(ImagePicker.MediaType?.Images ? { mediaTypes: [ImagePicker.MediaType.Images] } : {}),
       quality: 0.8,
-    });
+    };
+    if (picker.MediaType?.Images) {
+      options.mediaTypes = [picker.MediaType.Images];
+    }
+    const result = await ImagePicker.launchImageLibraryAsync(options as any);
     if (result.canceled) return;
     const files = result.assets.map((asset) => ({
       uri: asset.uri,
