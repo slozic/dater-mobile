@@ -130,6 +130,8 @@ export async function fetchDateById(id: string): Promise<DateDetails> {
 export async function createDate(payload: {
   title: string;
   location: string;
+  latitude?: number | null;
+  longitude?: number | null;
   description: string;
   scheduledTime: string;
 }): Promise<string> {
