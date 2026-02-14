@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { login } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+
+const ACCENT = '#ff5c8a';
 
 type Props = {
   onSuccess: () => void;
@@ -9,6 +12,7 @@ type Props = {
 
 export default function LoginForm({ onSuccess }: Props) {
   const router = useRouter();
+  const { refreshToken } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -19,6 +23,7 @@ export default function LoginForm({ onSuccess }: Props) {
     setIsLoggingIn(true);
     try {
       await login(username, password);
+      await refreshToken();
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed.');
@@ -51,12 +56,19 @@ export default function LoginForm({ onSuccess }: Props) {
       {isLoggingIn ? (
         <ActivityIndicator />
       ) : (
-        <Pressable style={styles.primaryButton} onPress={handleLogin} disabled={!username || !password}>
+        <Pressable
+          style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+          onPress={handleLogin}
+          disabled={!username || !password}
+        >
           <Text style={styles.primaryButtonText}>Login</Text>
         </Pressable>
       )}
-      <Pressable style={styles.secondaryButton} onPress={() => router.push('/auth/register')}>
-        <Text style={styles.secondaryButtonText}>Create account</Text>
+      <Pressable
+        style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
+        onPress={() => router.push('/auth/register')}
+      >
+        <Text style={styles.outlineButtonText}>Create account</Text>
       </Pressable>
     </View>
   );
@@ -85,7 +97,7 @@ const styles = StyleSheet.create({
     marginTop: -6,
   },
   primaryButton: {
-    backgroundColor: '#ff5c8a',
+    backgroundColor: ACCENT,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -94,15 +106,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-  secondaryButton: {
-    backgroundColor: '#f0f0f4',
+  outlineButton: {
+    borderWidth: 1,
+    borderColor: ACCENT,
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
   },
-  secondaryButtonText: {
-    color: '#1b1b1f',
+  outlineButtonText: {
+    color: ACCENT,
     fontWeight: '600',
+  },
+  buttonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   input: {
     borderWidth: 1,

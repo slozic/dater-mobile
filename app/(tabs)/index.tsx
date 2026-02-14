@@ -14,9 +14,13 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import LoginForm from '@/components/LoginForm';
 import { DateListItem, fetchDates, getToken } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+
+const ACCENT = '#ff5c8a';
 
 export default function DatesScreen() {
   const router = useRouter();
+  const { setTokenValue } = useAuth();
   const [token, setToken] = useState<string | null>(null);
   const [dates, setDates] = useState<DateListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +51,7 @@ export default function DatesScreen() {
     } catch (err) {
       if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
         setToken(null);
+        setTokenValue(null);
         setDates([]);
         setError('');
         return;
@@ -119,7 +124,10 @@ export default function DatesScreen() {
           <Text style={styles.title}>Dates</Text>
           <Text style={styles.subtitle}>Find something nearby</Text>
         </View>
-        <Pressable style={styles.addButton} onPress={() => router.push('/date/new')}>
+        <Pressable
+          style={({ pressed }) => [styles.addButton, pressed && styles.buttonPressed]}
+          onPress={() => router.push('/date/new')}
+        >
           <Text style={styles.addButtonText}>+ New</Text>
         </Pressable>
       </View>
@@ -136,10 +144,16 @@ export default function DatesScreen() {
               keyboardType="numeric"
             />
           </View>
-          <Pressable style={styles.filterButton} onPress={handleUseMyLocation}>
+          <Pressable
+            style={({ pressed }) => [styles.filterButton, pressed && styles.buttonPressed]}
+            onPress={handleUseMyLocation}
+          >
             <Text style={styles.filterButtonText}>Use my location</Text>
           </Pressable>
-          <Pressable style={styles.filterButton} onPress={loadDates}>
+          <Pressable
+            style={({ pressed }) => [styles.filterButton, pressed && styles.buttonPressed]}
+            onPress={loadDates}
+          >
             <Text style={styles.filterButtonText}>Apply</Text>
           </Pressable>
         </View>
@@ -158,11 +172,12 @@ export default function DatesScreen() {
         data={dates}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <Pressable onPress={() => router.push(`/date/${item.id}`)}>
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text style={styles.cardLocation}>{item.location}</Text>
-            </View>
+          <Pressable
+            onPress={() => router.push(`/date/${item.id}`)}
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+          >
+            <Text style={styles.cardTitle}>{item.title}</Text>
+            <Text style={styles.cardLocation}>{item.location}</Text>
           </Pressable>
         )}
         showsVerticalScrollIndicator={false}
@@ -203,7 +218,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   addButton: {
-    backgroundColor: '#ff5c8a',
+    backgroundColor: ACCENT,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
@@ -255,7 +270,7 @@ const styles = StyleSheet.create({
     minWidth: 72,
   },
   filterButton: {
-    backgroundColor: '#f0f0f4',
+    backgroundColor: ACCENT,
     height: 36,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -263,8 +278,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filterButtonText: {
-    color: '#1b1b1f',
+    color: '#fff',
     fontWeight: '600',
+  },
+  buttonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
   },
   filterNote: {
     color: '#7a7a86',
@@ -275,15 +294,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 92, 138, 0.18)',
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderWidth: 0,
+  },
+  cardPressed: {
+    transform: [{ scale: 0.99 }],
   },
   cardTitle: {
     fontSize: 18,

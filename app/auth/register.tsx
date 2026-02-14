@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { registerUser } from '@/lib/api';
 
+const ACCENT = '#ff5c8a';
+
 export default function RegisterScreen() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -86,12 +88,18 @@ export default function RegisterScreen() {
         {loading ? (
           <ActivityIndicator />
         ) : (
-          <Pressable style={styles.primaryButton} onPress={handleRegister}>
+          <Pressable
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+            onPress={handleRegister}
+          >
             <Text style={styles.primaryButtonText}>Register</Text>
           </Pressable>
         )}
-        <Pressable style={styles.secondaryButton} onPress={() => router.back()}>
-          <Text style={styles.secondaryButtonText}>Back to login</Text>
+        <Pressable
+          style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.outlineButtonText}>Back to login</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -137,7 +145,7 @@ const styles = StyleSheet.create({
     color: '#2e7d32',
   },
   primaryButton: {
-    backgroundColor: '#ff5c8a',
+    backgroundColor: ACCENT,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -146,14 +154,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-  secondaryButton: {
-    backgroundColor: '#f0f0f4',
+  outlineButton: {
+    borderWidth: 1,
+    borderColor: ACCENT,
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
   },
-  secondaryButtonText: {
-    color: '#1b1b1f',
+  outlineButtonText: {
+    color: ACCENT,
     fontWeight: '600',
+  },
+  buttonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
 });

@@ -1,30 +1,16 @@
 import { Tabs } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getToken } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const [hasToken, setHasToken] = useState(false);
-
-  const checkToken = useCallback(() => {
-    getToken().then((token) => setHasToken(Boolean(token)));
-  }, []);
-
-  useEffect(() => {
-    checkToken();
-  }, [checkToken]);
-
-  useFocusEffect(
-    useCallback(() => {
-      checkToken();
-    }, [checkToken]),
-  );
+  const { token } = useAuth();
+  const hasToken = Boolean(token);
 
   return (
     <Tabs

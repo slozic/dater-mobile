@@ -20,6 +20,8 @@ import {
   uploadDateImages,
 } from '@/lib/api';
 
+const ACCENT = '#ff5c8a';
+
 export default function DateDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -240,7 +242,10 @@ export default function DateDetailsScreen() {
               ))}
             </View>
             {date.dateOwnerId === currentUserId ? (
-              <Pressable style={styles.primaryButton} onPress={handlePickImages}>
+              <Pressable
+                style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+                onPress={handlePickImages}
+              >
                 <Text style={styles.primaryButtonText}>Upload images</Text>
               </Pressable>
             ) : null}
@@ -255,13 +260,19 @@ export default function DateDetailsScreen() {
                 </View>
               </View>
               {joinStatus === 'NOT_REQUESTED' ? (
-                <Pressable style={styles.primaryButton} onPress={handleRequestJoin}>
+                <Pressable
+                  style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+                  onPress={handleRequestJoin}
+                >
                   <Text style={styles.primaryButtonText}>Request to join</Text>
                 </Pressable>
               ) : null}
               {joinStatus === 'ON_WAITLIST' ? (
-                <Pressable style={styles.secondaryButton} onPress={handleCancelJoin}>
-                  <Text style={styles.secondaryButtonText}>Cancel request</Text>
+                <Pressable
+                  style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
+                  onPress={handleCancelJoin}
+                >
+                  <Text style={styles.outlineButtonText}>Cancel request</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -287,8 +298,11 @@ export default function DateDetailsScreen() {
                         </View>
                         <View style={styles.requestActions}>
                           <Text style={styles.acceptedBadge}>Accepted</Text>
-                          <Pressable style={styles.rejectButton} onPress={() => confirmReject(accepted.id)}>
-                            <Text style={styles.rejectButtonText}>Reject</Text>
+                          <Pressable
+                            style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
+                            onPress={() => confirmReject(accepted.id)}
+                          >
+                            <Text style={styles.outlineButtonText}>Reject</Text>
                           </Pressable>
                         </View>
                       </View>
@@ -316,21 +330,31 @@ export default function DateDetailsScreen() {
                                 </Pressable>
                             <View style={styles.requestActions}>
                               <Pressable
-                                    style={styles.acceptButton}
+                                    style={({ pressed }) => [
+                                      styles.primaryButton,
+                                      styles.acceptButton,
+                                      pressed && styles.buttonPressed,
+                                    ]}
                                     onPress={() => confirmAccept(req.id)}
                                 disabled={Boolean(accepted && accepted.id !== req.id)}
                               >
                                 <Text
                                   style={[
-                                        styles.acceptButtonText,
+                                        styles.primaryButtonText,
                                     accepted && accepted.id !== req.id ? styles.disabledText : undefined,
                                   ]}
                                 >
                                   Accept
                                 </Text>
                               </Pressable>
-                                  <Pressable style={styles.rejectButton} onPress={() => confirmReject(req.id)}>
-                                    <Text style={styles.rejectButtonText}>Reject</Text>
+                                  <Pressable
+                                    style={({ pressed }) => [
+                                      styles.outlineButton,
+                                      pressed && styles.buttonPressed,
+                                    ]}
+                                    onPress={() => confirmReject(req.id)}
+                                  >
+                                    <Text style={styles.outlineButtonText}>Reject</Text>
                               </Pressable>
                             </View>
                           </View>
@@ -440,7 +464,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     marginTop: 8,
-    backgroundColor: '#ff5c8a',
+    backgroundColor: ACCENT,
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
@@ -454,15 +478,16 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 12,
   },
-  secondaryButton: {
+  outlineButton: {
     marginTop: 8,
-    backgroundColor: '#f0f0f4',
+    borderWidth: 1,
+    borderColor: ACCENT,
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
   },
-  secondaryButtonText: {
-    color: '#1b1b1f',
+  outlineButtonText: {
+    color: ACCENT,
     fontWeight: '600',
   },
   requestRow: {
@@ -497,24 +522,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   acceptButton: {
-    backgroundColor: '#e8f5e9',
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderRadius: 10,
-  },
-  acceptButtonText: {
-    color: '#2e7d32',
-    fontWeight: '600',
-  },
-  rejectButton: {
-    backgroundColor: '#ffebee',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-  },
-  rejectButtonText: {
-    color: '#c1121f',
-    fontWeight: '600',
   },
   disabledText: {
     color: '#b0b0b8',
@@ -540,5 +550,9 @@ const styles = StyleSheet.create({
   toggleButtonText: {
     color: '#1b1b1f',
     fontWeight: '600',
+  },
+  buttonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
 });

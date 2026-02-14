@@ -22,9 +22,13 @@ import {
   UserProfile,
 } from '@/lib/api';
 import { useFocusEffect } from '@react-navigation/native';
+import { useAuth } from '@/lib/auth';
+
+const ACCENT = '#ff5c8a';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { setTokenValue } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [formState, setFormState] = useState({
     firstName: '',
@@ -145,7 +149,10 @@ export default function ProfileScreen() {
             <Text style={styles.rowLabel}>Birthday</Text>
             <Text style={styles.value}>{profile.birthday ?? '-'}</Text>
             <View style={styles.sectionActions}>
-              <Pressable style={styles.primaryButton} onPress={() => setEditing(true)}>
+              <Pressable
+                style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+                onPress={() => setEditing(true)}
+              >
                 <Text style={styles.primaryButtonText}>Edit Profile</Text>
               </Pressable>
             </View>
@@ -171,7 +178,10 @@ export default function ProfileScreen() {
               </View>
             ))}
           </View>
-          <Pressable style={styles.primaryButton} onPress={handlePickProfileImages}>
+          <Pressable
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+            onPress={handlePickProfileImages}
+          >
             <Text style={styles.primaryButtonText}>Upload photos</Text>
           </Pressable>
         </View>
@@ -208,11 +218,18 @@ export default function ProfileScreen() {
             />
             {saving ? <ActivityIndicator /> : null}
             <View style={styles.buttonRow}>
-              <Pressable style={styles.primaryButton} onPress={handleSave} disabled={saving}>
+              <Pressable
+                style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+                onPress={handleSave}
+                disabled={saving}
+              >
                 <Text style={styles.primaryButtonText}>Save</Text>
               </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={() => setEditing(false)}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              <Pressable
+                style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
+                onPress={() => setEditing(false)}
+              >
+                <Text style={styles.outlineButtonText}>Cancel</Text>
               </Pressable>
             </View>
           </View>
@@ -221,12 +238,13 @@ export default function ProfileScreen() {
         <View style={styles.settingsCard}>
           <Text style={styles.settingsTitle}>Settings</Text>
           <Pressable
-            style={styles.logoutButton}
+            style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
             onPress={async () => {
               await clearToken();
+              setTokenValue(null);
               router.replace('/(tabs)');
             }}>
-            <Text style={styles.logoutButtonText}>Log out</Text>
+            <Text style={styles.outlineButtonText}>Log out</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -331,7 +349,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   primaryButton: {
-    backgroundColor: '#ff5c8a',
+    backgroundColor: ACCENT,
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
@@ -340,16 +358,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-  secondaryButton: {
-    backgroundColor: '#f0f0f4',
+  outlineButton: {
+    borderWidth: 1,
+    borderColor: ACCENT,
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
     flex: 1,
   },
-  secondaryButtonText: {
-    color: '#1b1b1f',
+  outlineButtonText: {
+    color: ACCENT,
     fontWeight: '600',
+  },
+  buttonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   settingsCard: {
     backgroundColor: '#fff',
@@ -366,15 +389,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#1b1b1f',
-  },
-  logoutButton: {
-    backgroundColor: '#ffe5ec',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  logoutButtonText: {
-    color: '#c1121f',
-    fontWeight: '600',
   },
 });

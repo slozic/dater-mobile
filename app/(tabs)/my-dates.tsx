@@ -5,6 +5,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import LoginForm from '@/components/LoginForm';
 import { DateListItem, fetchDates, getToken } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+
+const ACCENT = '#ff5c8a';
 
 type SectionData = {
   title: string;
@@ -25,6 +28,7 @@ const formatDisplayDateTime = (value: string) => {
 
 export default function MyDatesScreen() {
   const router = useRouter();
+  const { setTokenValue } = useAuth();
   const [token, setToken] = useState<string | null>(null);
   const [sections, setSections] = useState<SectionData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +46,7 @@ export default function MyDatesScreen() {
     } catch (err) {
       if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
         setToken(null);
+        setTokenValue(null);
         setSections([]);
         setError('');
         return;
@@ -110,12 +115,13 @@ export default function MyDatesScreen() {
           </View>
         )}
         renderItem={({ item }) => (
-          <Pressable onPress={() => router.push(`/date/${item.id}`)}>
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text style={styles.cardLocation}>{item.location}</Text>
-              <Text style={styles.cardTime}>{formatDisplayDateTime(item.scheduledTime)}</Text>
-            </View>
+          <Pressable
+            onPress={() => router.push(`/date/${item.id}`)}
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+          >
+            <Text style={styles.cardTitle}>{item.title}</Text>
+            <Text style={styles.cardLocation}>{item.location}</Text>
+            <Text style={styles.cardTime}>{formatDisplayDateTime(item.scheduledTime)}</Text>
           </Pressable>
         )}
         showsVerticalScrollIndicator={false}
@@ -171,15 +177,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 92, 138, 0.18)',
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderWidth: 0,
+  },
+  cardPressed: {
+    transform: [{ scale: 0.99 }],
   },
   cardTitle: {
     fontSize: 18,
