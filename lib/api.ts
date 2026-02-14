@@ -96,8 +96,19 @@ export type DateListItem = {
   scheduledTime: string;
 };
 
-export async function fetchDates(filter = 'all'): Promise<DateListItem[]> {
-  const response = await withAuthFetch(`/dates?filter=${filter}`);
+export async function fetchDates(
+  filter = 'all',
+  options?: { latitude?: number | null; longitude?: number | null; radiusKm?: number | null },
+): Promise<DateListItem[]> {
+  const params = new URLSearchParams({ filter });
+  if (options?.latitude != null && options?.longitude != null) {
+    params.append('latitude', String(options.latitude));
+    params.append('longitude', String(options.longitude));
+    if (options.radiusKm != null) {
+      params.append('radiusKm', String(options.radiusKm));
+    }
+  }
+  const response = await withAuthFetch(`/dates?${params.toString()}`);
 
   if (!response.ok) {
     throw new Error('Failed to load dates.');

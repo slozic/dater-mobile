@@ -1,8 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
 import LoginForm from '@/components/LoginForm';
 import { DateListItem, fetchDates, getToken } from '@/lib/api';
 
@@ -12,13 +21,29 @@ export default function DatesScreen() {
   const [dates, setDates] = useState<DateListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [radiusKm, setRadiusKm] = useState('10');
+  const [locationStatus, setLocationStatus] = useState('');
 
   const loadDates = async () => {
     setError('');
     setLoading(true);
     try {
-      const data = await fetchDates('all');
-      setDates(data);
+      const [allDates, ownedDates, requestedDates] = await Promise.all([
+        fetchDates('all', {
+          latitude,
+          longitude,
+          radiusKm: radiusKm ? Number(radiusKm) : null,
+        }),
+        fetchDates('owned'),
+        fetchDates('requested'),
+      ]);
+      const excludedIds = new Set([
+        ...ownedDates.map((item) => item.id),
+        ...requestedDates.map((item) => item.id),
+      ]);
+      setDates(allDates.filter((item) => !excludedIds.has(item.id)));
     } catch (err) {
       if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
         setToken(null);
@@ -29,6 +54,23 @@ export default function DatesScreen() {
       setError(err instanceof Error ? err.message : 'Failed to load dates.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUseMyLocation = async () => {
+    setLocationStatus('');
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        setLocationStatus('Location permission is required.');
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({});
+      setLatitude(position.coords.latitude);
+      setLongitude(position.coords.longitude);
+      setLocationStatus('Location saved. Tap Apply to filter.');
+    } catch (err) {
+      setLocationStatus(err instanceof Error ? err.message : 'Could not retrieve location.');
     }
   };
 
@@ -81,6 +123,35 @@ export default function DatesScreen() {
           <Text style={styles.addButtonText}>+ New</Text>
         </Pressable>
       </View>
+      <View style={styles.filterCard}>
+        <View style={styles.filterRow}>
+          <View style={styles.filterField}>
+            <Text style={styles.filterLabel}>Radius (km)</Text>
+            <TextInput
+              style={styles.filterInput}
+              value={radiusKm}
+              onChangeText={setRadiusKm}
+              placeholder="10"
+              placeholderTextColor="#9a9aa3"
+              keyboardType="numeric"
+            />
+          </View>
+          <Pressable style={styles.filterButton} onPress={handleUseMyLocation}>
+            <Text style={styles.filterButtonText}>Use my location</Text>
+          </Pressable>
+          <Pressable style={styles.filterButton} onPress={loadDates}>
+            <Text style={styles.filterButtonText}>Apply</Text>
+          </Pressable>
+        </View>
+        {locationStatus ? <Text style={styles.filterNote}>{locationStatus}</Text> : null}
+        {latitude != null && longitude != null ? (
+          <Text style={styles.filterNote}>
+            Using {latitude.toFixed(4)}, {longitude.toFixed(4)}
+          </Text>
+        ) : (
+          <Text style={styles.filterNote}>Set your location to enable radius filtering.</Text>
+        )}
+      </View>
       {loading ? <ActivityIndicator /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <FlatList
@@ -94,7 +165,16 @@ export default function DatesScreen() {
             </View>
           </Pressable>
         )}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={dates.length === 0 ? styles.emptyList : undefined}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No dates available.</Text>
+              <Text style={styles.emptyText}>Try increasing your radius or check back later.</Text>
+            </View>
+          ) : null
+        }
       />
     </SafeAreaView>
   );
@@ -137,6 +217,59 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
+  filterCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
+    gap: 8,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  filterField: {
+    width: 96,
+    gap: 6,
+  },
+  filterLabel: {
+    fontSize: 12,
+    color: '#6b6b73',
+    fontWeight: '600',
+  },
+  filterInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    height: 36,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    color: '#1b1b1f',
+    backgroundColor: '#fafafe',
+    minWidth: 72,
+  },
+  filterButton: {
+    backgroundColor: '#f0f0f4',
+    height: 36,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    justifyContent: 'center',
+  },
+  filterButtonText: {
+    color: '#1b1b1f',
+    fontWeight: '600',
+  },
+  filterNote: {
+    color: '#7a7a86',
+    fontSize: 12,
+  },
   error: {
     color: '#b00020',
     marginBottom: 12,
@@ -163,6 +296,19 @@ const styles = StyleSheet.create({
   },
   emptyList: {
     paddingTop: 24,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    gap: 6,
+  },
+  emptyTitle: {
+    fontWeight: '700',
+    color: '#1b1b1f',
+  },
+  emptyText: {
+    color: '#7a7a86',
+    textAlign: 'center',
   },
   loginWrapper: {
     marginTop: 24,

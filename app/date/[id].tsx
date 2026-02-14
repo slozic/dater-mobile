@@ -127,6 +127,18 @@ export default function DateDetailsScreen() {
 
   const formatStatus = (status: string) => status.replace(/_/g, ' ').toLowerCase();
 
+  const formatDisplayDateTime = (value: string) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return new Intl.DateTimeFormat(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(parsed);
+  };
+
   const badgeStyle = (status: string) => {
     switch (status) {
       case 'ACCEPTED':
@@ -196,10 +208,14 @@ export default function DateDetailsScreen() {
           <Text style={styles.value}>{date.location}</Text>
           <Text style={styles.label}>Description</Text>
           <Text style={styles.value}>{date.description}</Text>
-          <Text style={styles.label}>Scheduled</Text>
-          <Text style={styles.value}>{date.scheduledTime}</Text>
-          <Text style={styles.label}>Creator</Text>
-          <Text style={styles.value}>{date.dateOwner}</Text>
+          <Text style={styles.label}>Date</Text>
+          <Text style={styles.value}>{formatDisplayDateTime(date.scheduledTime)}</Text>
+          {date.dateOwnerId !== currentUserId ? (
+            <>
+              <Text style={styles.label}>Creator</Text>
+              <Text style={styles.value}>{date.dateOwner}</Text>
+            </>
+          ) : null}
 
           {actionMessage ? <Text style={styles.notice}>{actionMessage}</Text> : null}
 
