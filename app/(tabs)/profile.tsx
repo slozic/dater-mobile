@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -35,12 +36,14 @@ export default function ProfileScreen() {
     lastName: '',
     username: '',
     birthday: '',
+    gender: '',
   });
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [images, setImages] = useState<Array<{ id: string; imageUrl: string | null }>>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const loadProfile = async () => {
     setError('');
@@ -54,6 +57,7 @@ export default function ProfileScreen() {
         lastName: data.lastName ?? '',
         username: data.username ?? '',
         birthday: data.birthday ?? '',
+        gender: data.gender ?? '',
       });
     } catch (err) {
       if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
@@ -148,6 +152,8 @@ export default function ProfileScreen() {
             <Text style={styles.value}>{profile.email}</Text>
             <Text style={styles.rowLabel}>Birthday</Text>
             <Text style={styles.value}>{profile.birthday ?? '-'}</Text>
+            <Text style={styles.rowLabel}>Gender</Text>
+            <Text style={styles.value}>{profile.gender ?? '-'}</Text>
             <View style={styles.sectionActions}>
               <Pressable
                 style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
@@ -166,7 +172,9 @@ export default function ProfileScreen() {
             {images.map((img) => (
               <View key={img.id} style={styles.imageWrap}>
                 {img.imageUrl ? (
-                  <Image source={{ uri: img.imageUrl }} style={styles.image} />
+                  <Pressable onPress={() => setPreviewImage(img.imageUrl)}>
+                    <Image source={{ uri: img.imageUrl }} style={styles.image} />
+                  </Pressable>
                 ) : (
                   <View style={styles.imageFallback}>
                     <Text style={styles.imageFallbackText}>No image</Text>
@@ -216,6 +224,27 @@ export default function ProfileScreen() {
               value={formState.birthday}
               onChangeText={(value) => setFormState({ ...formState, birthday: value })}
             />
+            <View style={styles.genderRow}>
+              {['Male', 'Female', 'Other'].map((option) => (
+                <Pressable
+                  key={option}
+                  style={[
+                    styles.genderOption,
+                    formState.gender === option ? styles.genderOptionSelected : undefined,
+                  ]}
+                  onPress={() => setFormState({ ...formState, gender: option })}
+                >
+                  <Text
+                    style={[
+                      styles.genderOptionText,
+                      formState.gender === option ? styles.genderOptionTextSelected : undefined,
+                    ]}
+                  >
+                    {option}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
             {saving ? <ActivityIndicator /> : null}
             <View style={styles.buttonRow}>
               <Pressable
@@ -248,6 +277,15 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      <Modal visible={Boolean(previewImage)} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPreviewImage(null)} />
+          {previewImage ? <Image source={{ uri: previewImage }} style={styles.modalImage} /> : null}
+          <Pressable style={styles.modalClose} onPress={() => setPreviewImage(null)}>
+            <Text style={styles.modalCloseText}>Close</Text>
+          </Pressable>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -374,6 +412,31 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     transform: [{ scale: 0.98 }],
   },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  genderOption: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d8d8e0',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  genderOptionSelected: {
+    borderColor: ACCENT,
+    backgroundColor: '#ffe9f0',
+  },
+  genderOptionText: {
+    color: '#555562',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  genderOptionTextSelected: {
+    color: ACCENT,
+  },
   settingsCard: {
     backgroundColor: '#fff',
     borderRadius: 14,
@@ -389,5 +452,29 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#1b1b1f',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalImage: {
+    width: '100%',
+    height: '70%',
+    borderRadius: 14,
+    resizeMode: 'contain',
+  },
+  modalClose: {
+    marginTop: 16,
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  modalCloseText: {
+    color: '#1b1b1f',
+    fontWeight: '600',
   },
 });

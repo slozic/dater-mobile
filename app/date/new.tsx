@@ -33,8 +33,21 @@ export default function CreateDateScreen() {
   const [useDeviceLocation, setUseDeviceLocation] = useState(false);
   const [locationStatus, setLocationStatus] = useState('');
   const [error, setError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [touched, setTouched] = useState({
+    title: false,
+    location: false,
+    description: false,
+    scheduledTime: false,
+  });
   const [saving, setSaving] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
+
+  const titleError = !title.trim();
+  const locationError = !location.trim();
+  const descriptionError = !description.trim();
+  const dateError = !scheduledTime.trim();
+  const hasValidationErrors = titleError || locationError || descriptionError || dateError;
 
   const formatDateTime = (date: Date) => {
     const pad = (value: number) => value.toString().padStart(2, '0');
@@ -126,6 +139,11 @@ export default function CreateDateScreen() {
   };
 
   const handleCreate = async () => {
+    setSubmitted(true);
+    if (hasValidationErrors) {
+      setError('Please fill all required fields.');
+      return;
+    }
     setError('');
     setSaving(true);
     try {
@@ -167,19 +185,33 @@ export default function CreateDateScreen() {
         <Text style={styles.title}>New Date</Text>
         <View style={styles.form}>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              (submitted || touched.title) && titleError ? styles.inputError : undefined,
+            ]}
             placeholder="Title"
             placeholderTextColor="#666"
             value={title}
             onChangeText={setTitle}
+            onBlur={() => setTouched((prev) => ({ ...prev, title: true }))}
           />
+          {(submitted || touched.title) && titleError ? (
+            <Text style={styles.fieldError}>Title is required.</Text>
+          ) : null}
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              (submitted || touched.location) && locationError ? styles.inputError : undefined,
+            ]}
             placeholder="Location"
             placeholderTextColor="#666"
             value={location}
             onChangeText={setLocation}
+            onBlur={() => setTouched((prev) => ({ ...prev, location: true }))}
           />
+          {(submitted || touched.location) && locationError ? (
+            <Text style={styles.fieldError}>Location is required.</Text>
+          ) : null}
           <View style={styles.toggleRow}>
             <View style={styles.toggleText}>
               <Text style={styles.toggleLabel}>Use device location for filtering</Text>
@@ -191,17 +223,29 @@ export default function CreateDateScreen() {
           </View>
           {locationStatus ? <Text style={styles.helperText}>{locationStatus}</Text> : null}
           <TextInput
-            style={[styles.input, styles.multiline]}
+            style={[
+              styles.input,
+              styles.multiline,
+              (submitted || touched.description) && descriptionError ? styles.inputError : undefined,
+            ]}
             placeholder="Description"
             placeholderTextColor="#666"
             value={description}
             onChangeText={setDescription}
+            onBlur={() => setTouched((prev) => ({ ...prev, description: true }))}
             multiline
           />
+          {(submitted || touched.description) && descriptionError ? (
+            <Text style={styles.fieldError}>Description is required.</Text>
+          ) : null}
           <View style={styles.pickerRow}>
             <Pressable
-              style={styles.secondaryButton}
+              style={[
+                styles.secondaryButton,
+                (submitted || touched.scheduledTime) && dateError ? styles.inputError : undefined,
+              ]}
               onPress={() => {
+                setTouched((prev) => ({ ...prev, scheduledTime: true }));
                 if (Platform.OS === 'android') {
                   openAndroidPicker();
                 } else {
@@ -215,6 +259,9 @@ export default function CreateDateScreen() {
               {selectedDate ? formatDisplayDateTime(selectedDate) : 'Not set'}
             </Text>
           </View>
+          {(submitted || touched.scheduledTime) && dateError ? (
+            <Text style={styles.fieldError}>Date and time are required.</Text>
+          ) : null}
           {Platform.OS === 'ios' && showPicker ? (
             <>
               <DateTimePicker
@@ -249,11 +296,7 @@ export default function CreateDateScreen() {
           {saving || uploadingImages ? (
             <ActivityIndicator />
           ) : (
-            <Pressable
-              style={styles.primaryButton}
-              onPress={handleCreate}
-              disabled={!title || !location || !scheduledTime}
-            >
+            <Pressable style={styles.primaryButton} onPress={handleCreate}>
               <Text style={styles.primaryButtonText}>Create Date</Text>
             </Pressable>
           )}
@@ -304,6 +347,14 @@ const styles = StyleSheet.create({
   },
   error: {
     color: '#b00020',
+  },
+  fieldError: {
+    color: '#b00020',
+    fontSize: 12,
+    marginTop: -6,
+  },
+  inputError: {
+    borderColor: '#b00020',
   },
   helperText: {
     color: '#6b6b73',

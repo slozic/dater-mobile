@@ -76,6 +76,7 @@ export async function registerUser(payload: {
   password: string;
   email: string;
   birthday?: string;
+  gender?: string;
 }): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/users/registration`, {
     method: 'POST',
@@ -162,6 +163,42 @@ export async function createDate(payload: {
   return data.dateEventId;
 }
 
+export async function updateDate(
+  dateId: string,
+  payload: {
+    title?: string;
+    location?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    description?: string;
+    scheduledTime?: string;
+  },
+): Promise<DateDetails> {
+  const response = await withAuthFetch(`/dates/${dateId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to update date.');
+  }
+
+  return response.json();
+}
+
+export async function deleteDate(dateId: string): Promise<void> {
+  const response = await withAuthFetch(`/dates/${dateId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to delete date.');
+  }
+}
+
 export type UserProfile = {
   id: string;
   firstName: string;
@@ -169,6 +206,7 @@ export type UserProfile = {
   username: string;
   email: string;
   birthday: string | null;
+  gender?: string | null;
 };
 
 export async function fetchProfile(): Promise<UserProfile> {
@@ -186,6 +224,7 @@ export async function updateProfile(payload: {
   lastName?: string;
   username?: string;
   birthday?: string;
+  gender?: string;
 }): Promise<UserProfile> {
   const response = await withAuthFetch('/users/profile', {
     method: 'PUT',
@@ -256,9 +295,10 @@ export type ProfileImage = {
 };
 
 export type PublicProfile = {
+  userId?: string;
   username: string;
-  firstName?: string | null;
-  lastName?: string | null;
+  fullName?: string | null;
+  gender?: string | null;
   profileImageData?: ProfileImage[];
 };
 

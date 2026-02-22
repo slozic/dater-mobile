@@ -1,14 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import {
   acceptAttendee,
   AttendeeRequest,
   DateDetails,
   DateImage,
   deleteDateImage,
+  deleteDate,
   fetchAttendeeRequests,
   fetchAttendeeStatus,
   fetchDateById,
@@ -17,6 +31,7 @@ import {
   requestToJoinDate,
   cancelJoinRequest,
   rejectAttendee,
+  updateDate,
   uploadDateImages,
 } from '@/lib/api';
 
@@ -32,6 +47,17 @@ export default function DateDetailsScreen() {
   const [joinStatus, setJoinStatus] = useState<string>('NOT_REQUESTED');
   const [showWaitlist, setShowWaitlist] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [showEditPicker, setShowEditPicker] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingDate, setDeletingDate] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    location: '',
+    description: '',
+    scheduledTime: '',
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -44,6 +70,12 @@ export default function DateDetailsScreen() {
     Promise.all([fetchDateById(id), fetchProfile()])
       .then(([dateData, profile]) => {
         setDate(dateData);
+        setEditForm({
+          title: dateData.title ?? '',
+          location: dateData.location ?? '',
+          description: dateData.description ?? '',
+          scheduledTime: dateData.scheduledTime?.slice(0, 16) ?? '',
+        });
         setCurrentUserId(profile.id);
       })
       .catch((err) => {
@@ -114,6 +146,48 @@ export default function DateDetailsScreen() {
     }
   };
 
+  const handleSaveEdit = async () => {
+    if (!id) return;
+    setError('');
+    setSavingEdit(true);
+    try {
+      const updated = await updateDate(id, {
+        title: editForm.title,
+        location: editForm.location,
+        description: editForm.description,
+        scheduledTime: editForm.scheduledTime,
+      });
+      setDate(updated);
+      setEditing(false);
+      setActionMessage('Date updated.');
+    } catch (err) {
+      if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
+        router.replace('/(tabs)');
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Failed to update date.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteDate = async () => {
+    if (!id) return;
+    setDeletingDate(true);
+    try {
+      await deleteDate(id);
+      router.replace('/(tabs)');
+    } catch (err) {
+      if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
+        router.replace('/(tabs)');
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Failed to delete date.');
+    } finally {
+      setDeletingDate(false);
+    }
+  };
+
   const handleRequestJoin = async () => {
     if (!id) return;
     try {
@@ -139,6 +213,38 @@ export default function DateDetailsScreen() {
       hour: 'numeric',
       minute: '2-digit',
     }).format(parsed);
+  };
+
+  const formatDateTimeForInput = (date: Date) => {
+    const pad = (value: number) => value.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+      date.getHours(),
+    )}:${pad(date.getMinutes())}`;
+  };
+
+  const openEditAndroidPicker = () => {
+    const current = editForm.scheduledTime ? new Date(editForm.scheduledTime) : new Date();
+    const safeCurrent = Number.isNaN(current.getTime()) ? new Date() : current;
+
+    DateTimePickerAndroid.open({
+      value: safeCurrent,
+      mode: 'date',
+      is24Hour: true,
+      onChange: (_, date) => {
+        if (!date) return;
+        DateTimePickerAndroid.open({
+          value: date,
+          mode: 'time',
+          is24Hour: true,
+          onChange: (_, time) => {
+            if (!time) return;
+            const combined = new Date(date);
+            combined.setHours(time.getHours(), time.getMinutes(), 0, 0);
+            setEditForm((prev) => ({ ...prev, scheduledTime: formatDateTimeForInput(combined) }));
+          },
+        });
+      },
+    });
   };
 
   const badgeStyle = (status: string) => {
@@ -204,20 +310,149 @@ export default function DateDetailsScreen() {
       {loading ? <ActivityIndicator /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {date ? (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.card}>
           <Text style={styles.title}>{date.title}</Text>
-          <Text style={styles.label}>Location</Text>
-          <Text style={styles.value}>{date.location}</Text>
-          <Text style={styles.label}>Description</Text>
-          <Text style={styles.value}>{date.description}</Text>
-          <Text style={styles.label}>Date</Text>
-          <Text style={styles.value}>{formatDisplayDateTime(date.scheduledTime)}</Text>
-          {date.dateOwnerId !== currentUserId ? (
-            <>
-              <Text style={styles.label}>Creator</Text>
-              <Text style={styles.value}>{date.dateOwner}</Text>
-            </>
+          {date.dateOwnerId === currentUserId ? (
+            <View style={styles.ownerActionRow}>
+              {!editing ? (
+                <>
+                  <Pressable
+                    style={({ pressed }) => [styles.primaryButton, styles.flexButton, pressed && styles.buttonPressed]}
+                    onPress={() => setEditing(true)}
+                  >
+                    <Text style={styles.primaryButtonText}>Edit date</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.dangerOutlineButton,
+                      styles.flexButton,
+                      pressed && styles.buttonPressed,
+                    ]}
+                    onPress={() =>
+                      Alert.alert('Delete date?', 'This will permanently delete this date.', [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete', style: 'destructive', onPress: handleDeleteDate },
+                      ])
+                    }
+                    disabled={deletingDate}
+                  >
+                    <Text style={styles.dangerOutlineText}>{deletingDate ? 'Deleting...' : 'Delete date'}</Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </View>
           ) : null}
+
+          {editing ? (
+            <View style={styles.editForm}>
+              <TextInput
+                style={styles.input}
+                placeholder="Title"
+                placeholderTextColor="#666"
+                value={editForm.title}
+                onChangeText={(value) => setEditForm((prev) => ({ ...prev, title: value }))}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Location"
+                placeholderTextColor="#666"
+                value={editForm.location}
+                onChangeText={(value) => setEditForm((prev) => ({ ...prev, location: value }))}
+              />
+              <TextInput
+                style={[styles.input, styles.multiline]}
+                placeholder="Description"
+                placeholderTextColor="#666"
+                value={editForm.description}
+                onChangeText={(value) => setEditForm((prev) => ({ ...prev, description: value }))}
+                multiline
+              />
+              <View style={styles.pickerRow}>
+                <Pressable
+                  style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
+                  onPress={() => {
+                    if (Platform.OS === 'android') {
+                      openEditAndroidPicker();
+                    } else {
+                      setShowEditPicker(true);
+                    }
+                  }}
+                >
+                  <Text style={styles.outlineButtonText}>Pick date & time</Text>
+                </Pressable>
+                <Text style={styles.value}>
+                  {editForm.scheduledTime ? formatDisplayDateTime(editForm.scheduledTime) : 'Not set'}
+                </Text>
+              </View>
+              {Platform.OS === 'ios' && showEditPicker ? (
+                <>
+                  <DateTimePicker
+                    value={
+                      Number.isNaN(new Date(editForm.scheduledTime).getTime())
+                        ? new Date()
+                        : new Date(editForm.scheduledTime)
+                    }
+                    mode="datetime"
+                    display="inline"
+                    onChange={(_: unknown, selected?: Date) => {
+                      if (selected) {
+                        setEditForm((prev) => ({
+                          ...prev,
+                          scheduledTime: formatDateTimeForInput(selected),
+                        }));
+                      }
+                    }}
+                  />
+                  <Pressable
+                    style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
+                    onPress={() => setShowEditPicker(false)}
+                  >
+                    <Text style={styles.outlineButtonText}>Done</Text>
+                  </Pressable>
+                </>
+              ) : null}
+              <View style={styles.ownerActionRow}>
+                <Pressable
+                  style={({ pressed }) => [styles.primaryButton, styles.flexButton, pressed && styles.buttonPressed]}
+                  onPress={handleSaveEdit}
+                  disabled={savingEdit}
+                >
+                  <Text style={styles.primaryButtonText}>{savingEdit ? 'Saving...' : 'Save changes'}</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.outlineButton, styles.flexButton, pressed && styles.buttonPressed]}
+                  onPress={() => {
+                    setEditing(false);
+                    setShowEditPicker(false);
+                    setEditForm({
+                      title: date.title ?? '',
+                      location: date.location ?? '',
+                      description: date.description ?? '',
+                      scheduledTime: date.scheduledTime?.slice(0, 16) ?? '',
+                    });
+                  }}
+                >
+                  <Text style={styles.outlineButtonText}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.label}>Location</Text>
+              <Text style={styles.value}>{date.location}</Text>
+              <Text style={styles.label}>Description</Text>
+              <Text style={styles.value}>{date.description}</Text>
+              <Text style={styles.label}>Date</Text>
+              <Text style={styles.value}>{formatDisplayDateTime(date.scheduledTime)}</Text>
+              {date.dateOwnerId !== currentUserId ? (
+                <>
+                  <Text style={styles.label}>Creator</Text>
+                  <Text style={styles.value}>{date.dateOwner}</Text>
+                </>
+              ) : null}
+            </>
+          )}
 
           {actionMessage ? <Text style={styles.notice}>{actionMessage}</Text> : null}
 
@@ -227,7 +462,9 @@ export default function DateDetailsScreen() {
               {images.map((img) => (
                 <View key={img.id} style={styles.imageWrap}>
                   {img.imageUrl ? (
-                    <Image source={{ uri: img.imageUrl }} style={styles.image} />
+                    <Pressable onPress={() => setPreviewImage(img.imageUrl)}>
+                      <Image source={{ uri: img.imageUrl }} style={styles.image} />
+                    </Pressable>
                   ) : (
                     <View style={styles.imageFallback}>
                       <Text style={styles.imageFallbackText}>No image</Text>
@@ -366,7 +603,17 @@ export default function DateDetailsScreen() {
             </View>
           ) : null}
         </View>
+        </ScrollView>
       ) : null}
+      <Modal visible={Boolean(previewImage)} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPreviewImage(null)} />
+          {previewImage ? <Image source={{ uri: previewImage }} style={styles.modalImage} /> : null}
+          <Pressable style={styles.modalClose} onPress={() => setPreviewImage(null)}>
+            <Text style={styles.modalCloseText}>Close</Text>
+          </Pressable>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -377,6 +624,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     backgroundColor: '#f7f7fb',
+  },
+  scroll: {
+    paddingBottom: 24,
   },
   error: {
     color: '#b00020',
@@ -469,9 +719,36 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
   },
+  flexButton: {
+    flex: 1,
+  },
   primaryButtonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  ownerActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 10,
+  },
+  editForm: {
+    gap: 10,
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 10,
+    backgroundColor: '#fff',
+    color: '#111',
+  },
+  multiline: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  pickerRow: {
+    gap: 8,
   },
   deleteText: {
     color: '#c1121f',
@@ -488,6 +765,18 @@ const styles = StyleSheet.create({
   },
   outlineButtonText: {
     color: ACCENT,
+    fontWeight: '600',
+  },
+  dangerOutlineButton: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#c1121f',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  dangerOutlineText: {
+    color: '#c1121f',
     fontWeight: '600',
   },
   requestRow: {
@@ -554,5 +843,29 @@ const styles = StyleSheet.create({
   buttonPressed: {
     opacity: 0.85,
     transform: [{ scale: 0.98 }],
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalImage: {
+    width: '100%',
+    height: '70%',
+    borderRadius: 14,
+    resizeMode: 'contain',
+  },
+  modalClose: {
+    marginTop: 16,
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  modalCloseText: {
+    color: '#1b1b1f',
+    fontWeight: '600',
   },
 });
