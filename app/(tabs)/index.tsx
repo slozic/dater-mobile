@@ -18,6 +18,18 @@ import { useAuth } from '@/lib/auth';
 
 const ACCENT = '#ff5c8a';
 
+const formatDisplayDateTime = (value: string) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(parsed);
+};
+
 export default function DatesScreen() {
   const router = useRouter();
   const { setTokenValue } = useAuth();
@@ -178,6 +190,7 @@ export default function DatesScreen() {
           >
             <Text style={styles.cardTitle}>{item.title}</Text>
             <Text style={styles.cardLocation}>{item.location}</Text>
+            <Text style={styles.cardTime}>{formatDisplayDateTime(item.scheduledTime)}</Text>
           </Pressable>
         )}
         showsVerticalScrollIndicator={false}
@@ -311,6 +324,11 @@ const styles = StyleSheet.create({
   cardLocation: {
     color: '#7a7a86',
     marginTop: 4,
+  },
+  cardTime: {
+    color: '#6b6b73',
+    marginTop: 6,
+    fontSize: 12,
   },
   emptyList: {
     paddingTop: 24,

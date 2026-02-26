@@ -149,6 +149,7 @@ export default function RegisterScreen() {
             </Pressable>
           </>
         ) : null}
+        <Text style={styles.fieldLabel}>Gender</Text>
         <View style={styles.genderRow}>
           {['Male', 'Female', 'Other'].map((option) => (
             <Pressable
@@ -288,6 +289,12 @@ const styles = StyleSheet.create({
   birthdayValue: {
     color: '#1b1b1f',
     fontWeight: '600',
+  },
+  fieldLabel: {
+    color: '#6b6b73',
+    fontWeight: '600',
+    fontSize: 12,
+    marginTop: -2,
   },
   inputError: {
     borderColor: '#b00020',

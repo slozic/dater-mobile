@@ -44,6 +44,7 @@ export default function ProfileScreen() {
   const [error, setError] = useState('');
   const [images, setImages] = useState<Array<{ id: string; imageUrl: string | null }>>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [updatingDiscovery, setUpdatingDiscovery] = useState(false);
 
   const loadProfile = async () => {
     setError('');
@@ -130,6 +131,20 @@ export default function ProfileScreen() {
       setImages((prev) => prev.filter((img) => img.id !== imageId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete image.');
+    }
+  };
+
+  const updateDiscoveryFilter = async (value: 'ALL' | 'MALE' | 'FEMALE') => {
+    if (!profile) return;
+    setUpdatingDiscovery(true);
+    setError('');
+    try {
+      const updated = await updateProfile({ dateListGenderFilter: value });
+      setProfile(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update date filter preference.');
+    } finally {
+      setUpdatingDiscovery(false);
     }
   };
 
@@ -224,6 +239,7 @@ export default function ProfileScreen() {
               value={formState.birthday}
               onChangeText={(value) => setFormState({ ...formState, birthday: value })}
             />
+            <Text style={styles.rowLabel}>Gender</Text>
             <View style={styles.genderRow}>
               {['Male', 'Female', 'Other'].map((option) => (
                 <Pressable
@@ -266,6 +282,37 @@ export default function ProfileScreen() {
 
         <View style={styles.settingsCard}>
           <Text style={styles.settingsTitle}>Settings</Text>
+          <Text style={styles.rowLabel}>Show dates from</Text>
+          <View style={styles.genderRow}>
+            {[
+              { id: 'ALL', label: 'All' },
+              { id: 'MALE', label: 'Male' },
+              { id: 'FEMALE', label: 'Female' },
+            ].map((option) => (
+              <Pressable
+                key={option.id}
+                style={[
+                  styles.genderOption,
+                  profile?.dateListGenderFilter?.toUpperCase() === option.id
+                    ? styles.genderOptionSelected
+                    : undefined,
+                ]}
+                onPress={() => updateDiscoveryFilter(option.id as 'ALL' | 'MALE' | 'FEMALE')}
+                disabled={updatingDiscovery}
+              >
+                <Text
+                  style={[
+                    styles.genderOptionText,
+                    profile?.dateListGenderFilter?.toUpperCase() === option.id
+                      ? styles.genderOptionTextSelected
+                      : undefined,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
           <Pressable
             style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
             onPress={async () => {

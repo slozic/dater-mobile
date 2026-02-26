@@ -17,16 +17,27 @@ export default function LoginForm({ onSuccess }: Props) {
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [touched, setTouched] = useState({ username: false, password: false });
+
+  const usernameError = !username.trim();
+  const passwordError = !password.trim();
 
   const handleLogin = async () => {
+    setSubmitted(true);
+    if (usernameError || passwordError) {
+      setError('Please enter your email/username and password.');
+      return;
+    }
+
     setError('');
     setIsLoggingIn(true);
     try {
       await login(username, password);
       await refreshToken();
       onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed.');
+    } catch {
+      setError('Unable to sign in. Please check your credentials and try again.');
     } finally {
       setIsLoggingIn(false);
     }
@@ -37,21 +48,29 @@ export default function LoginForm({ onSuccess }: Props) {
       <Text style={styles.title}>Login</Text>
       <Text style={styles.subtitle}>Welcome back</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, (submitted || touched.username) && usernameError ? styles.inputError : undefined]}
         placeholder="Email or username"
         placeholderTextColor="#666"
         autoCapitalize="none"
         value={username}
         onChangeText={setUsername}
+        onBlur={() => setTouched((prev) => ({ ...prev, username: true }))}
       />
+      {(submitted || touched.username) && usernameError ? (
+        <Text style={styles.fieldError}>Email or username is required.</Text>
+      ) : null}
       <TextInput
-        style={styles.input}
+        style={[styles.input, (submitted || touched.password) && passwordError ? styles.inputError : undefined]}
         placeholder="Password"
         placeholderTextColor="#666"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
+        onBlur={() => setTouched((prev) => ({ ...prev, password: true }))}
       />
+      {(submitted || touched.password) && passwordError ? (
+        <Text style={styles.fieldError}>Password is required.</Text>
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {isLoggingIn ? (
         <ActivityIndicator />
@@ -59,7 +78,6 @@ export default function LoginForm({ onSuccess }: Props) {
         <Pressable
           style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
           onPress={handleLogin}
-          disabled={!username || !password}
         >
           <Text style={styles.primaryButtonText}>Login</Text>
         </Pressable>
@@ -131,5 +149,13 @@ const styles = StyleSheet.create({
   },
   error: {
     color: '#b00020',
+  },
+  fieldError: {
+    color: '#b00020',
+    fontSize: 12,
+    marginTop: -6,
+  },
+  inputError: {
+    borderColor: '#b00020',
   },
 });

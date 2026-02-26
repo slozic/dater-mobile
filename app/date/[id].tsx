@@ -215,6 +215,12 @@ export default function DateDetailsScreen() {
     }).format(parsed);
   };
 
+  const isPastDate = (value: string) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return false;
+    return parsed.getTime() <= Date.now() + 60_000;
+  };
+
   const formatDateTimeForInput = (date: Date) => {
     const pad = (value: number) => value.toString().padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
@@ -313,20 +319,29 @@ export default function DateDetailsScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.card}>
           <Text style={styles.title}>{date.title}</Text>
+          {isPastDate(date.scheduledTime) ? (
+            <Text style={styles.pastInfo}>Past date: requests and new uploads are disabled.</Text>
+          ) : null}
           {date.dateOwnerId === currentUserId ? (
             <View style={styles.ownerActionRow}>
               {!editing ? (
                 <>
-                  <Pressable
-                    style={({ pressed }) => [styles.primaryButton, styles.flexButton, pressed && styles.buttonPressed]}
-                    onPress={() => setEditing(true)}
-                  >
-                    <Text style={styles.primaryButtonText}>Edit date</Text>
-                  </Pressable>
+                  {!isPastDate(date.scheduledTime) ? (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.primaryButton,
+                        styles.flexButton,
+                        pressed && styles.buttonPressed,
+                      ]}
+                      onPress={() => setEditing(true)}
+                    >
+                      <Text style={styles.primaryButtonText}>Edit date</Text>
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     style={({ pressed }) => [
                       styles.dangerOutlineButton,
-                      styles.flexButton,
+                      !isPastDate(date.scheduledTime) ? styles.flexButton : undefined,
                       pressed && styles.buttonPressed,
                     ]}
                     onPress={() =>
@@ -478,7 +493,7 @@ export default function DateDetailsScreen() {
                 </View>
               ))}
             </View>
-            {date.dateOwnerId === currentUserId ? (
+            {date.dateOwnerId === currentUserId && !isPastDate(date.scheduledTime) ? (
               <Pressable
                 style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
                 onPress={handlePickImages}
@@ -488,7 +503,7 @@ export default function DateDetailsScreen() {
             ) : null}
           </View>
 
-          {date.dateOwnerId !== currentUserId ? (
+          {date.dateOwnerId !== currentUserId && !isPastDate(date.scheduledTime) ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Join status</Text>
               <View style={styles.statusRow}>
@@ -515,7 +530,7 @@ export default function DateDetailsScreen() {
             </View>
           ) : null}
 
-          {date.dateOwnerId === currentUserId ? (
+          {date.dateOwnerId === currentUserId && !isPastDate(date.scheduledTime) ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Requests</Text>
               {requests.length === 0 ? <Text style={styles.value}>No requests yet.</Text> : null}
@@ -685,6 +700,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#2e7d32',
     fontWeight: '600',
+  },
+  pastInfo: {
+    marginBottom: 8,
+    color: '#7a7a86',
+    fontStyle: 'italic',
   },
   imageRow: {
     flexDirection: 'row',

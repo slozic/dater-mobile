@@ -26,11 +26,20 @@ const formatDisplayDateTime = (value: string) => {
   }).format(parsed);
 };
 
+const isPastDate = (value: string) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getTime() <= Date.now() + 60_000;
+};
+
 export default function MyDatesScreen() {
   const router = useRouter();
   const { setTokenValue } = useAuth();
   const [token, setToken] = useState<string | null>(null);
   const [sections, setSections] = useState<SectionData[]>([]);
+  const [pastDates, setPastDates] = useState<DateListItem[]>([]);
+  const [showPastDates, setShowPastDates] = useState(false);
+  const [loadingPastDates, setLoadingPastDates] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -54,6 +63,36 @@ export default function MyDatesScreen() {
       setError(err instanceof Error ? err.message : 'Failed to load dates.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPastDates = async () => {
+    setLoadingPastDates(true);
+    setError('');
+    try {
+      const [ownedAll, requestedAll] = await Promise.all([
+        fetchDates('owned', { includePast: true }),
+        fetchDates('requested', { includePast: true }),
+      ]);
+      const combined = [...ownedAll, ...requestedAll];
+      const byId = new Map<string, DateListItem>();
+      combined
+        .filter((item) => isPastDate(item.scheduledTime))
+        .forEach((item) => byId.set(item.id, item));
+      const sortedPast = Array.from(byId.values()).sort(
+        (a, b) => new Date(b.scheduledTime).getTime() - new Date(a.scheduledTime).getTime(),
+      );
+      setPastDates(sortedPast);
+      setShowPastDates(true);
+    } catch (err) {
+      if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
+        setToken(null);
+        setTokenValue(null);
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Failed to load past dates.');
+    } finally {
+      setLoadingPastDates(false);
     }
   };
 
@@ -135,6 +174,32 @@ export default function MyDatesScreen() {
           ) : null
         }
       />
+      {!showPastDates ? (
+        <Pressable style={styles.togglePastButton} onPress={loadPastDates} disabled={loadingPastDates}>
+          <Text style={styles.togglePastText}>
+            {loadingPastDates ? 'Loading past dates...' : 'View past dates'}
+          </Text>
+        </Pressable>
+      ) : (
+        <View style={styles.pastSection}>
+          <Text style={styles.sectionTitle}>Past dates</Text>
+          {pastDates.length === 0 ? <Text style={styles.sectionEmpty}>No past dates.</Text> : null}
+          {pastDates.map((item) => (
+            <Pressable
+              key={item.id}
+              onPress={() => router.push(`/date/${item.id}`)}
+              style={({ pressed }) => [styles.pastCard, pressed && styles.cardPressed]}
+            >
+              <Text style={styles.pastCardTitle}>{item.title}</Text>
+              <Text style={styles.pastCardText}>{item.location}</Text>
+              <Text style={styles.pastCardText}>{formatDisplayDateTime(item.scheduledTime)}</Text>
+            </Pressable>
+          ))}
+          <Pressable style={styles.togglePastButton} onPress={() => setShowPastDates(false)}>
+            <Text style={styles.togglePastText}>Hide past dates</Text>
+          </Pressable>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -201,7 +266,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   listContent: {
-    paddingBottom: 24,
+    paddingBottom: 12,
+  },
+  togglePastButton: {
+    marginTop: 8,
+    marginBottom: 16,
+    backgroundColor: '#f0f0f4',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  togglePastText: {
+    color: '#1b1b1f',
+    fontWeight: '600',
+  },
+  pastSection: {
+    marginBottom: 24,
+    gap: 8,
+  },
+  pastCard: {
+    backgroundColor: '#efeff4',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 8,
+  },
+  pastCardTitle: {
+    color: '#7a7a86',
+    fontWeight: '600',
+    textDecorationLine: 'line-through',
+  },
+  pastCardText: {
+    color: '#90909b',
+    marginTop: 4,
   },
   emptyState: {
     alignItems: 'center',

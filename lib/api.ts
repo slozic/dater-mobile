@@ -39,7 +39,7 @@ export async function login(username: string, password: string): Promise<string>
   });
 
   if (!response.ok) {
-    throw new Error('Invalid credentials.');
+    throw new Error('AUTH_LOGIN_FAILED');
   }
 
   const token = response.headers.get('Authorization');
@@ -99,7 +99,12 @@ export type DateListItem = {
 
 export async function fetchDates(
   filter = 'all',
-  options?: { latitude?: number | null; longitude?: number | null; radiusKm?: number | null },
+  options?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    radiusKm?: number | null;
+    includePast?: boolean;
+  },
 ): Promise<DateListItem[]> {
   const params = new URLSearchParams({ filter });
   if (options?.latitude != null && options?.longitude != null) {
@@ -108,6 +113,9 @@ export async function fetchDates(
     if (options.radiusKm != null) {
       params.append('radiusKm', String(options.radiusKm));
     }
+  }
+  if (options?.includePast) {
+    params.append('includePast', 'true');
   }
   const response = await withAuthFetch(`/dates?${params.toString()}`);
 
@@ -207,6 +215,7 @@ export type UserProfile = {
   email: string;
   birthday: string | null;
   gender?: string | null;
+  dateListGenderFilter?: 'ALL' | 'MALE' | 'FEMALE' | 'OTHER' | string | null;
 };
 
 export async function fetchProfile(): Promise<UserProfile> {
@@ -225,6 +234,7 @@ export async function updateProfile(payload: {
   username?: string;
   birthday?: string;
   gender?: string;
+  dateListGenderFilter?: string;
 }): Promise<UserProfile> {
   const response = await withAuthFetch('/users/profile', {
     method: 'PUT',
