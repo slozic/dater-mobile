@@ -2,33 +2,75 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { API_BASE_URL } from './config';
 
-const TOKEN_KEY = 'dater_token';
+const ACCESS_TOKEN_KEY = 'dater_token';
+const REFRESH_TOKEN_KEY = 'dater_refresh_token';
 
 export async function getToken(): Promise<string | null> {
   if (Platform.OS === 'web') {
-    return typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
+    return typeof localStorage !== 'undefined' ? localStorage.getItem(ACCESS_TOKEN_KEY) : null;
   }
-  return SecureStore.getItemAsync(TOKEN_KEY);
+  return SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
 }
 
 export async function setToken(token: string): Promise<void> {
   if (Platform.OS === 'web') {
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(ACCESS_TOKEN_KEY, token);
     }
     return;
   }
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, token);
+}
+
+async function getRefreshToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem(REFRESH_TOKEN_KEY) : null;
+  }
+  return SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+}
+
+async function setRefreshToken(token: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(REFRESH_TOKEN_KEY, token);
+    }
+    return;
+  }
+  await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, token);
 }
 
 export async function clearToken(): Promise<void> {
   if (Platform.OS === 'web') {
     if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
     }
     return;
   }
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+  await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+}
+
+async function refreshAccessToken(): Promise<string> {
+  const refreshToken = await getRefreshToken();
+  if (!refreshToken) {
+    throw new Error('AUTH_EXPIRED');
+  }
+  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+  });
+  if (!response.ok) {
+    throw new Error('AUTH_EXPIRED');
+  }
+  const data = (await response.json()) as { accessToken?: string; refreshToken?: string };
+  if (!data.accessToken || !data.refreshToken) {
+    throw new Error('AUTH_EXPIRED');
+  }
+  await setToken(data.accessToken);
+  await setRefreshToken(data.refreshToken);
+  return data.accessToken;
 }
 
 export async function login(username: string, password: string): Promise<string> {
@@ -43,27 +85,43 @@ export async function login(username: string, password: string): Promise<string>
   }
 
   const token = response.headers.get('Authorization');
-  if (!token) {
+  const refreshToken = response.headers.get('Refresh-Token');
+  if (!token || !refreshToken) {
     throw new Error('Missing auth token.');
   }
 
   await setToken(token);
+  await setRefreshToken(refreshToken);
   return token;
 }
 
 async function withAuthFetch(path: string, options: RequestInit = {}) {
   const token = await getToken();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const buildHeaders = (currentToken: string | null, originalHeaders?: HeadersInit): HeadersInit => ({
+    Authorization: currentToken ?? '',
+    ...(originalHeaders ?? {}),
+  });
+
+  let response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers: {
-      Authorization: token ?? '',
-      ...(options.headers ?? {}),
-    },
+    headers: buildHeaders(token, options.headers),
   });
 
   if (response.status === 401 || response.status === 403) {
-    await clearToken();
-    throw new Error('AUTH_EXPIRED');
+    try {
+      const newAccessToken = await refreshAccessToken();
+      response = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: buildHeaders(newAccessToken, options.headers),
+      });
+    } catch {
+      await clearToken();
+      throw new Error('AUTH_EXPIRED');
+    }
+    if (response.status === 401 || response.status === 403) {
+      await clearToken();
+      throw new Error('AUTH_EXPIRED');
+    }
   }
 
   return response;

@@ -85,7 +85,11 @@ export default function ProfileScreen() {
     setError('');
     setSaving(true);
     try {
-      const updated = await updateProfile(formState);
+      const updated = await updateProfile({
+        firstName: formState.firstName.trim(),
+        lastName: formState.lastName.trim(),
+        username: formState.username.trim(),
+      });
       setProfile(updated);
       setEditing(false);
     } catch (err) {
@@ -155,31 +159,6 @@ export default function ProfileScreen() {
         {loading ? <ActivityIndicator /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {profile && !editing ? (
-          <View style={styles.card}>
-            <Text style={styles.rowLabel}>First name</Text>
-            <Text style={styles.value}>{profile.firstName}</Text>
-            <Text style={styles.rowLabel}>Last name</Text>
-            <Text style={styles.value}>{profile.lastName}</Text>
-            <Text style={styles.rowLabel}>Username</Text>
-            <Text style={styles.value}>{profile.username}</Text>
-            <Text style={styles.rowLabel}>Email</Text>
-            <Text style={styles.value}>{profile.email}</Text>
-            <Text style={styles.rowLabel}>Birthday</Text>
-            <Text style={styles.value}>{profile.birthday ?? '-'}</Text>
-            <Text style={styles.rowLabel}>Gender</Text>
-            <Text style={styles.value}>{profile.gender ?? '-'}</Text>
-            <View style={styles.sectionActions}>
-              <Pressable
-                style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
-                onPress={() => setEditing(true)}
-              >
-                <Text style={styles.primaryButtonText}>Edit Profile</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Profile photos</Text>
           <View style={styles.imageRow}>
@@ -202,12 +181,37 @@ export default function ProfileScreen() {
             ))}
           </View>
           <Pressable
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+            style={({ pressed }) => [styles.primaryButton, styles.compactPrimaryButton, pressed && styles.buttonPressed]}
             onPress={handlePickProfileImages}
           >
             <Text style={styles.primaryButtonText}>Upload photos</Text>
           </Pressable>
         </View>
+
+        {profile && !editing ? (
+          <View style={styles.card}>
+            <Text style={styles.rowLabel}>Full name</Text>
+            <Text style={styles.value}>
+              {[profile.firstName, profile.lastName].filter(Boolean).join(' ') || '-'}
+            </Text>
+            <Text style={styles.rowLabel}>Username</Text>
+            <Text style={styles.value}>{profile.username}</Text>
+            <Text style={styles.rowLabel}>Email</Text>
+            <Text style={styles.value}>{profile.email}</Text>
+            <Text style={styles.rowLabel}>Birthday</Text>
+            <Text style={styles.value}>{profile.birthday ?? '-'}</Text>
+            <Text style={styles.rowLabel}>Gender</Text>
+            <Text style={styles.value}>{profile.gender ?? '-'}</Text>
+            <View style={styles.sectionActions}>
+              <Pressable
+                style={({ pressed }) => [styles.primaryButton, styles.compactPrimaryButton, pressed && styles.buttonPressed]}
+                onPress={() => setEditing(true)}
+              >
+                <Text style={styles.primaryButtonText}>Edit Profile</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
         {profile && editing ? (
           <View style={styles.form}>
@@ -232,12 +236,12 @@ export default function ProfileScreen() {
               value={formState.username}
               onChangeText={(value) => setFormState({ ...formState, username: value })}
             />
+            <Text style={styles.rowLabel}>Birthday</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Birthday (YYYY-MM-DD)"
-              placeholderTextColor="#666"
-              value={formState.birthday}
-              onChangeText={(value) => setFormState({ ...formState, birthday: value })}
+              style={[styles.input, styles.inputDisabled]}
+              value={formState.birthday || '-'}
+              editable={false}
+              selectTextOnFocus={false}
             />
             <Text style={styles.rowLabel}>Gender</Text>
             <View style={styles.genderRow}>
@@ -246,9 +250,10 @@ export default function ProfileScreen() {
                   key={option}
                   style={[
                     styles.genderOption,
+                    styles.genderOptionDisabled,
                     formState.gender === option ? styles.genderOptionSelected : undefined,
                   ]}
-                  onPress={() => setFormState({ ...formState, gender: option })}
+                  disabled
                 >
                   <Text
                     style={[
@@ -264,14 +269,14 @@ export default function ProfileScreen() {
             {saving ? <ActivityIndicator /> : null}
             <View style={styles.buttonRow}>
               <Pressable
-                style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+                style={({ pressed }) => [styles.primaryButton, styles.actionButton, pressed && styles.buttonPressed]}
                 onPress={handleSave}
                 disabled={saving}
               >
                 <Text style={styles.primaryButtonText}>Save</Text>
               </Pressable>
               <Pressable
-                style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
+                style={({ pressed }) => [styles.outlineButton, styles.actionButton, pressed && styles.buttonPressed]}
                 onPress={() => setEditing(false)}
               >
                 <Text style={styles.outlineButtonText}>Cancel</Text>
@@ -314,7 +319,7 @@ export default function ProfileScreen() {
             ))}
           </View>
           <Pressable
-            style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
+            style={({ pressed }) => [styles.outlineButton, styles.compactOutlineButton, pressed && styles.buttonPressed]}
             onPress={async () => {
               await clearToken();
               setTokenValue(null);
@@ -425,10 +430,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     color: '#111',
   },
+  inputDisabled: {
+    backgroundColor: '#f2f2f6',
+    color: '#7a7a86',
+  },
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  actionButton: {
+    flex: 1,
   },
   sectionActions: {
     marginTop: 12,
@@ -438,6 +450,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
+  },
+  compactPrimaryButton: {
+    alignSelf: 'center',
+    width: 180,
+    paddingHorizontal: 16,
   },
   primaryButtonText: {
     color: '#fff',
@@ -450,6 +467,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     flex: 1,
+  },
+  compactOutlineButton: {
+    alignSelf: 'center',
+    width: 180,
+    paddingHorizontal: 16,
+    flex: 0,
   },
   outlineButtonText: {
     color: ACCENT,
@@ -471,6 +494,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
     backgroundColor: '#fff',
+  },
+  genderOptionDisabled: {
+    opacity: 0.7,
   },
   genderOptionSelected: {
     borderColor: ACCENT,

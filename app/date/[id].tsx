@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   acceptAttendee,
   AttendeeRequest,
@@ -45,7 +46,9 @@ export default function DateDetailsScreen() {
   const [images, setImages] = useState<DateImage[]>([]);
   const [requests, setRequests] = useState<AttendeeRequest[]>([]);
   const [joinStatus, setJoinStatus] = useState<string>('NOT_REQUESTED');
-  const [showWaitlist, setShowWaitlist] = useState(false);
+  const [showRequests, setShowRequests] = useState(false);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [requestsLoaded, setRequestsLoaded] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -86,7 +89,7 @@ export default function DateDetailsScreen() {
         setError(err instanceof Error ? err.message : 'Failed to load date.');
       })
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => {
     if (!id) return;
@@ -97,13 +100,6 @@ export default function DateDetailsScreen() {
       .then((status) => setJoinStatus(status.joinDateStatus ?? 'NOT_REQUESTED'))
       .catch(() => {});
   }, [id]);
-
-  useEffect(() => {
-    if (!id || !date || !currentUserId) return;
-    if (date.dateOwnerId === currentUserId) {
-      fetchAttendeeRequests(id).then(setRequests).catch(() => {});
-    }
-  }, [id, date, currentUserId]);
 
   const handlePickImages = async () => {
     if (!id) return;
@@ -279,22 +275,61 @@ export default function DateDetailsScreen() {
     }
   };
 
+  const loadRequests = async () => {
+    if (!id) return;
+    setLoadingRequests(true);
+    try {
+      const updated = await fetchAttendeeRequests(id);
+      setRequests(updated);
+      setRequestsLoaded(true);
+    } catch (err) {
+      if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
+        router.replace('/(tabs)');
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Failed to load requests.');
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  const toggleRequests = async () => {
+    if (showRequests) {
+      setShowRequests(false);
+      return;
+    }
+    setShowRequests(true);
+    if (!requestsLoaded) {
+      await loadRequests();
+    }
+  };
+
   const handleAccept = async (userId: string) => {
     if (!id) return;
-    await acceptAttendee(id, userId);
-    const updated = await fetchAttendeeRequests(id);
-    setRequests(updated);
-    setActionMessage('Request accepted.');
-    Alert.alert('Request accepted', 'You accepted this attendee.');
+    try {
+      await acceptAttendee(id, userId);
+      const updated = await fetchAttendeeRequests(id);
+      setRequests(updated);
+      setRequestsLoaded(true);
+      setActionMessage('Request accepted.');
+      Alert.alert('Request accepted', 'You accepted this attendee.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to accept request.');
+    }
   };
 
   const handleReject = async (userId: string) => {
     if (!id) return;
-    await rejectAttendee(id, userId);
-    const updated = await fetchAttendeeRequests(id);
-    setRequests(updated);
-    setActionMessage('Request rejected.');
-    Alert.alert('Request rejected', 'You rejected this attendee.');
+    try {
+      await rejectAttendee(id, userId);
+      const updated = await fetchAttendeeRequests(id);
+      setRequests(updated);
+      setRequestsLoaded(true);
+      setActionMessage('Request rejected.');
+      Alert.alert('Request rejected', 'You rejected this attendee.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject request.');
+    }
   };
 
   const confirmAccept = (userId: string) => {
@@ -463,7 +498,15 @@ export default function DateDetailsScreen() {
               {date.dateOwnerId !== currentUserId ? (
                 <>
                   <Text style={styles.label}>Creator</Text>
-                  <Text style={styles.value}>{date.dateOwner}</Text>
+                  <View style={styles.creatorRow}>
+                    <Text style={styles.value}>{date.dateOwner}</Text>
+                    <Pressable
+                      style={({ pressed }) => [styles.creatorProfileButton, pressed && styles.buttonPressed]}
+                      onPress={() => router.push({ pathname: '/user/[id]', params: { id: date.dateOwnerId } })}
+                    >
+                      <Text style={styles.creatorProfileButtonText}>View profile</Text>
+                    </Pressable>
+                  </View>
                 </>
               ) : null}
             </>
@@ -513,7 +556,7 @@ export default function DateDetailsScreen() {
               </View>
               {joinStatus === 'NOT_REQUESTED' ? (
                 <Pressable
-                  style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+                  style={({ pressed }) => [styles.primaryButton, styles.compactCtaButton, pressed && styles.buttonPressed]}
                   onPress={handleRequestJoin}
                 >
                   <Text style={styles.primaryButtonText}>Request to join</Text>
@@ -521,7 +564,7 @@ export default function DateDetailsScreen() {
               ) : null}
               {joinStatus === 'ON_WAITLIST' ? (
                 <Pressable
-                  style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
+                  style={({ pressed }) => [styles.outlineButton, styles.compactCtaButton, pressed && styles.buttonPressed]}
                   onPress={handleCancelJoin}
                 >
                   <Text style={styles.outlineButtonText}>Cancel request</Text>
@@ -533,88 +576,113 @@ export default function DateDetailsScreen() {
           {date.dateOwnerId === currentUserId && !isPastDate(date.scheduledTime) ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Requests</Text>
-              {requests.length === 0 ? <Text style={styles.value}>No requests yet.</Text> : null}
-              {(() => {
-                const accepted = requests.find((req) => req.status === 'ACCEPTED');
-                const waitlist = requests.filter((req) => req.status === 'ON_WAITLIST');
-                return (
-                  <View style={styles.requestSection}>
-                    <Text style={styles.requestSubtitle}>Accepted</Text>
-                    {accepted ? (
-                      <View style={styles.requestRow}>
-                        <View style={styles.requestInfo}>
-                          <View style={styles.avatarCircle}>
-                            <Text style={styles.avatarText}>{accepted.username?.[0]?.toUpperCase() ?? '?'}</Text>
-                          </View>
-                          <Text style={styles.requestName}>{accepted.username}</Text>
-                        </View>
-                        <View style={styles.requestActions}>
-                          <Text style={styles.acceptedBadge}>Accepted</Text>
-                          <Pressable
-                            style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
-                            onPress={() => confirmReject(accepted.id)}
-                          >
-                            <Text style={styles.outlineButtonText}>Reject</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    ) : (
-                      <Text style={styles.value}>No accepted attendee yet.</Text>
-                    )}
+              {!showRequests ? (
+                <Pressable
+                  style={styles.toggleButton}
+                  onPress={toggleRequests}
+                  disabled={loadingRequests}
+                >
+                  <Text style={styles.toggleButtonText}>
+                    {loadingRequests
+                      ? 'Loading requests...'
+                      : requestsLoaded
+                        ? `View requests (${requests.length})`
+                        : 'View requests'}
+                  </Text>
+                </Pressable>
+              ) : (
+                <View style={styles.requestSection}>
+                  {loadingRequests ? <ActivityIndicator /> : null}
+                  {!loadingRequests && requests.length === 0 ? <Text style={styles.value}>No requests yet.</Text> : null}
+                  {!loadingRequests ? (
+                    <>
+                      {(() => {
+                        const accepted = requests.find((req) => req.status === 'ACCEPTED');
+                        const waitlist = requests.filter((req) => req.status === 'ON_WAITLIST');
+                        return (
+                          <>
+                            <Text style={styles.requestSubtitle}>Accepted attendee</Text>
+                            {accepted ? (
+                              <View style={styles.requestCard}>
+                                <Pressable
+                                  style={styles.requestInfo}
+                                  onPress={() =>
+                                    router.push({ pathname: '/user/[id]', params: { id: accepted.id } })
+                                  }
+                                  hitSlop={8}
+                                >
+                                  <View style={styles.avatarCircle}>
+                                    <MaterialIcons name="person" size={18} color="#6b6b73" />
+                                  </View>
+                                  <Text style={styles.requestName}>{accepted.username}</Text>
+                                </Pressable>
+                                <View style={styles.requestActions}>
+                                  <Pressable style={styles.requestPrimaryAction} disabled>
+                                    <Text style={[styles.requestPrimaryActionText, styles.disabledText]}>Accepted</Text>
+                                  </Pressable>
+                                  <Pressable
+                                    style={({ pressed }) => [styles.requestOutlineAction, pressed && styles.buttonPressed]}
+                                    onPress={() => confirmReject(accepted.id)}
+                                  >
+                                    <Text style={styles.requestOutlineActionText}>Reject</Text>
+                                  </Pressable>
+                                </View>
+                              </View>
+                            ) : (
+                              <Text style={styles.value}>No accepted attendee yet.</Text>
+                            )}
 
-                    <Pressable style={styles.toggleButton} onPress={() => setShowWaitlist((prev) => !prev)}>
-                      <Text style={styles.toggleButtonText}>
-                        {showWaitlist ? 'Hide waitlist' : `Show waitlist (${waitlist.length})`}
-                      </Text>
-                    </Pressable>
-                    {showWaitlist
-                      ? waitlist.map((req) => (
-                          <View key={req.id} style={styles.requestRow}>
+                            <Text style={styles.requestSubtitle}>Waitlist ({waitlist.length})</Text>
+                            {waitlist.length === 0 ? <Text style={styles.value}>No one on waitlist.</Text> : null}
+                            {waitlist.map((req) => (
+                              <View key={req.id} style={styles.requestCard}>
                                 <Pressable
                                   style={styles.requestInfo}
                                   onPress={() => router.push({ pathname: '/user/[id]', params: { id: req.id } })}
                                   hitSlop={8}
                                 >
                                   <View style={styles.avatarCircle}>
-                                    <Text style={styles.avatarText}>{req.username?.[0]?.toUpperCase() ?? '?'}</Text>
+                                    <MaterialIcons name="person" size={18} color="#6b6b73" />
                                   </View>
                                   <Text style={styles.requestName}>{req.username}</Text>
                                 </Pressable>
-                            <View style={styles.requestActions}>
-                              <Pressable
+                                <View style={styles.requestActions}>
+                                  <Pressable
                                     style={({ pressed }) => [
-                                      styles.primaryButton,
-                                      styles.acceptButton,
+                                      styles.requestPrimaryAction,
                                       pressed && styles.buttonPressed,
                                     ]}
                                     onPress={() => confirmAccept(req.id)}
-                                disabled={Boolean(accepted && accepted.id !== req.id)}
-                              >
-                                <Text
-                                  style={[
-                                        styles.primaryButtonText,
-                                    accepted && accepted.id !== req.id ? styles.disabledText : undefined,
-                                  ]}
-                                >
-                                  Accept
-                                </Text>
-                              </Pressable>
+                                    disabled={Boolean(accepted && accepted.id !== req.id)}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.requestPrimaryActionText,
+                                        accepted && accepted.id !== req.id ? styles.disabledText : undefined,
+                                      ]}
+                                    >
+                                      Accept
+                                    </Text>
+                                  </Pressable>
                                   <Pressable
-                                    style={({ pressed }) => [
-                                      styles.outlineButton,
-                                      pressed && styles.buttonPressed,
-                                    ]}
+                                    style={({ pressed }) => [styles.requestOutlineAction, pressed && styles.buttonPressed]}
                                     onPress={() => confirmReject(req.id)}
                                   >
-                                    <Text style={styles.outlineButtonText}>Reject</Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ))
-                      : null}
-                  </View>
-                );
-              })()}
+                                    <Text style={styles.requestOutlineActionText}>Reject</Text>
+                                  </Pressable>
+                                </View>
+                              </View>
+                            ))}
+                          </>
+                        );
+                      })()}
+                    </>
+                  ) : null}
+                  <Pressable style={styles.toggleButton} onPress={toggleRequests}>
+                    <Text style={styles.toggleButtonText}>Hide requests</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           ) : null}
         </View>
@@ -670,6 +738,26 @@ const styles = StyleSheet.create({
   },
   value: {
     color: '#1b1b1f',
+  },
+  creatorRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  creatorProfileButton: {
+    borderWidth: 1,
+    borderColor: ACCENT,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  creatorProfileButtonText: {
+    color: ACCENT,
+    fontWeight: '600',
+    fontSize: 12,
   },
   statusRow: {
     flexDirection: 'row',
@@ -739,6 +827,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
   },
+  compactCtaButton: {
+    alignSelf: 'center',
+    width: 180,
+    paddingHorizontal: 16,
+  },
   flexButton: {
     flex: 1,
   },
@@ -799,20 +892,17 @@ const styles = StyleSheet.create({
     color: '#c1121f',
     fontWeight: '600',
   },
-  requestRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   requestActions: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 8,
   },
   requestInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
   },
   avatarCircle: {
     width: 34,
@@ -822,39 +912,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: {
-    fontWeight: '700',
-    color: '#1b1b1f',
-  },
   requestName: {
     color: '#1b1b1f',
     fontWeight: '600',
-  },
-  acceptButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-  },
-  disabledText: {
-    color: '#b0b0b8',
+    flexShrink: 1,
   },
   requestSection: {
-    gap: 8,
+    gap: 10,
   },
   requestSubtitle: {
     fontWeight: '600',
     color: '#6b6b73',
   },
-  acceptedBadge: {
-    color: '#2e7d32',
-    fontWeight: '700',
+  requestCard: {
+    backgroundColor: '#f4f4f8',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   toggleButton: {
-    alignSelf: 'flex-start',
+    marginTop: 8,
     backgroundColor: '#f0f0f4',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  disabledText: {
+    color: '#b0b0b8',
+  },
+  requestPrimaryAction: {
+    backgroundColor: ACCENT,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
+  },
+  requestPrimaryActionText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  requestOutlineAction: {
+    borderWidth: 1,
+    borderColor: ACCENT,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  requestOutlineActionText: {
+    color: ACCENT,
+    fontWeight: '600',
   },
   toggleButtonText: {
     color: '#1b1b1f',
