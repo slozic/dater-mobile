@@ -53,6 +53,7 @@ export default function DateDetailsScreen() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [showEditPicker, setShowEditPicker] = useState(false);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingDate, setDeletingDate] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -298,6 +299,7 @@ export default function DateDetailsScreen() {
       return;
     }
     router.push({ pathname: '/date/chat/[id]', params: { id } });
+    setShowOptionsMenu(false);
   };
 
   const loadRequests = async () => {
@@ -382,42 +384,84 @@ export default function DateDetailsScreen() {
           {isPastDate(date.scheduledTime) ? (
             <Text style={styles.pastInfo}>Past date: requests and new uploads are disabled.</Text>
           ) : null}
-          {date.dateOwnerId === currentUserId ? (
-            <View style={styles.ownerActionRow}>
-              {!editing ? (
-                <>
-                  {!isPastDate(date.scheduledTime) ? (
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.primaryButton,
-                        styles.flexButton,
-                        pressed && styles.buttonPressed,
-                      ]}
-                      onPress={() => setEditing(true)}
-                    >
-                      <Text style={styles.primaryButtonText}>Edit date</Text>
-                    </Pressable>
-                  ) : null}
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.dangerOutlineButton,
-                      !isPastDate(date.scheduledTime) ? styles.flexButton : undefined,
-                      pressed && styles.buttonPressed,
-                    ]}
-                    onPress={() =>
-                      Alert.alert('Delete date?', 'This will permanently delete this date.', [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Delete', style: 'destructive', onPress: handleDeleteDate },
-                      ])
-                    }
-                    disabled={deletingDate}
-                  >
-                    <Text style={styles.dangerOutlineText}>{deletingDate ? 'Deleting...' : 'Delete date'}</Text>
-                  </Pressable>
-                </>
-              ) : null}
-            </View>
-          ) : null}
+          {(() => {
+            const isOwner = date.dateOwnerId === currentUserId;
+            const pastDate = isPastDate(date.scheduledTime);
+            const canEditDate = isOwner && !pastDate && !editing;
+            const canDeleteDate = isOwner && !editing;
+            const canOpenChat = !pastDate && (isOwner || joinStatus === 'ACCEPTED');
+            const canUploadImages = isOwner && !pastDate;
+            const hasMenuActions = canEditDate || canDeleteDate || canOpenChat || canUploadImages;
+
+            if (!hasMenuActions) return null;
+
+            return (
+              <View style={styles.optionsMenuWrap}>
+                <Pressable
+                  style={({ pressed }) => [styles.optionsTrigger, pressed && styles.buttonPressed]}
+                  onPress={() => setShowOptionsMenu((prev) => !prev)}
+                >
+                  <MaterialIcons name="more-vert" size={18} color="#1b1b1f" />
+                  <Text style={styles.optionsTriggerText}>Options</Text>
+                </Pressable>
+                {showOptionsMenu ? (
+                  <View style={styles.optionsMenu}>
+                    {canEditDate ? (
+                      <Pressable
+                        style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                        onPress={() => {
+                          setEditing(true);
+                          setShowOptionsMenu(false);
+                        }}
+                      >
+                        <MaterialIcons name="edit" size={16} color="#1b1b1f" />
+                        <Text style={styles.optionItemText}>Edit date</Text>
+                      </Pressable>
+                    ) : null}
+                    {canDeleteDate ? (
+                      <Pressable
+                        style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                        onPress={() => {
+                          setShowOptionsMenu(false);
+                          Alert.alert('Delete date?', 'This will permanently delete this date.', [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Delete', style: 'destructive', onPress: handleDeleteDate },
+                          ]);
+                        }}
+                        disabled={deletingDate}
+                      >
+                        <MaterialIcons name="delete-outline" size={16} color="#c1121f" />
+                        <Text style={[styles.optionItemText, styles.optionDangerText]}>
+                          {deletingDate ? 'Deleting...' : 'Delete date'}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                    {canOpenChat ? (
+                      <Pressable
+                        style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                        onPress={handleOpenChat}
+                      >
+                        <MaterialIcons name="chat-bubble-outline" size={16} color="#1b1b1f" />
+                        <Text style={styles.optionItemText}>Open chat</Text>
+                      </Pressable>
+                    ) : null}
+                    {canUploadImages ? (
+                      <Pressable
+                        style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                        onPress={async () => {
+                          setShowOptionsMenu(false);
+                          await handlePickImages();
+                        }}
+                      >
+                        <MaterialIcons name="add-photo-alternate" size={16} color="#1b1b1f" />
+                        <Text style={styles.optionItemText}>Upload images</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })()}
 
           {editing ? (
             <View style={styles.editForm}>
@@ -539,16 +583,6 @@ export default function DateDetailsScreen() {
 
           {actionMessage ? <Text style={styles.notice}>{actionMessage}</Text> : null}
 
-          {!isPastDate(date.scheduledTime) &&
-          (date.dateOwnerId === currentUserId || joinStatus === 'ACCEPTED') ? (
-            <Pressable
-              style={({ pressed }) => [styles.primaryButton, styles.compactCtaButton, pressed && styles.buttonPressed]}
-              onPress={handleOpenChat}
-            >
-              <Text style={styles.primaryButtonText}>Open chat</Text>
-            </Pressable>
-          ) : null}
-
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Images</Text>
             <View style={styles.imageRow}>
@@ -571,14 +605,6 @@ export default function DateDetailsScreen() {
                 </View>
               ))}
             </View>
-            {date.dateOwnerId === currentUserId && !isPastDate(date.scheduledTime) ? (
-              <Pressable
-                style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
-                onPress={handlePickImages}
-              >
-                <Text style={styles.primaryButtonText}>Upload images</Text>
-              </Pressable>
-            ) : null}
           </View>
 
           {date.dateOwnerId !== currentUserId && !isPastDate(date.scheduledTime) ? (
@@ -809,6 +835,60 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#1b1b1f',
+  },
+  optionsMenuWrap: {
+    alignItems: 'flex-end',
+    position: 'relative',
+    zIndex: 20,
+    marginBottom: 8,
+  },
+  optionsTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#d8d8df',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#fff',
+  },
+  optionsTriggerText: {
+    color: '#1b1b1f',
+    fontWeight: '600',
+  },
+  optionsMenu: {
+    position: 'absolute',
+    top: 38,
+    right: 0,
+    width: 210,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ececf2',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  optionPressed: {
+    backgroundColor: '#f7f7fb',
+  },
+  optionItemText: {
+    color: '#1b1b1f',
+    fontWeight: '500',
+  },
+  optionDangerText: {
+    color: '#c1121f',
   },
   section: {
     marginTop: 16,

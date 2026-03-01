@@ -1,16 +1,14 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import LoginForm from '@/components/LoginForm';
-import { DateListItem, fetchDates, getToken } from '@/lib/api';
+import { DateListItem, fetchAttendeeStatus, fetchDates, getToken } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
-type SectionData = {
-  title: string;
-  data: DateListItem[];
-};
+type ViewMode = 'created' | 'requested' | 'accepted' | 'past';
 
 const formatDisplayDateTime = (value: string) => {
   const parsed = new Date(value);
@@ -34,10 +32,12 @@ export default function MyDatesScreen() {
   const router = useRouter();
   const { setTokenValue } = useAuth();
   const [token, setToken] = useState<string | null>(null);
-  const [sections, setSections] = useState<SectionData[]>([]);
+  const [createdDates, setCreatedDates] = useState<DateListItem[]>([]);
+  const [requestedDates, setRequestedDates] = useState<DateListItem[]>([]);
+  const [acceptedDates, setAcceptedDates] = useState<DateListItem[]>([]);
   const [pastDates, setPastDates] = useState<DateListItem[]>([]);
-  const [showPastDates, setShowPastDates] = useState(false);
-  const [loadingPastDates, setLoadingPastDates] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('created');
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const loadingDatesRef = useRef(false);
@@ -48,16 +48,55 @@ export default function MyDatesScreen() {
     setError('');
     setLoading(true);
     try {
-      const [owned, requested] = await Promise.all([fetchDates('owned'), fetchDates('requested')]);
-      setSections([
-        { title: 'Created by me', data: owned },
-        { title: 'Requested / joined', data: requested },
+      const [ownedAll, requestedAll] = await Promise.all([
+        fetchDates('owned', { includePast: true }),
+        fetchDates('requested', { includePast: true }),
       ]);
+
+      const [ownedUpcoming, requestedUpcoming] = [
+        ownedAll.filter((item) => !isPastDate(item.scheduledTime)),
+        requestedAll.filter((item) => !isPastDate(item.scheduledTime)),
+      ];
+
+      const requestedStatuses = await Promise.all(
+        requestedUpcoming.map(async (item) => {
+          try {
+            const statusResponse = await fetchAttendeeStatus(item.id);
+            return { item, status: statusResponse.joinDateStatus as string | undefined };
+          } catch {
+            return { item, status: undefined };
+          }
+        }),
+      );
+
+      const acceptedOnly = requestedStatuses
+        .filter((entry) => entry.status === 'ACCEPTED')
+        .map((entry) => entry.item);
+      const requestedOnly = requestedStatuses
+        .filter((entry) => entry.status !== 'ACCEPTED')
+        .map((entry) => entry.item);
+
+      const combined = [...ownedAll, ...requestedAll];
+      const byId = new Map<string, DateListItem>();
+      combined
+        .filter((item) => isPastDate(item.scheduledTime))
+        .forEach((item) => byId.set(item.id, item));
+      const sortedPast = Array.from(byId.values()).sort(
+        (a, b) => new Date(b.scheduledTime).getTime() - new Date(a.scheduledTime).getTime(),
+      );
+
+      setCreatedDates(ownedUpcoming);
+      setRequestedDates(requestedOnly);
+      setAcceptedDates(acceptedOnly);
+      setPastDates(sortedPast);
     } catch (err) {
       if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
         setToken(null);
         setTokenValue(null);
-        setSections([]);
+        setCreatedDates([]);
+        setRequestedDates([]);
+        setAcceptedDates([]);
+        setPastDates([]);
         setError('');
         return;
       }
@@ -67,36 +106,6 @@ export default function MyDatesScreen() {
       loadingDatesRef.current = false;
     }
   }, [setTokenValue]);
-
-  const loadPastDates = async () => {
-    setLoadingPastDates(true);
-    setError('');
-    try {
-      const [ownedAll, requestedAll] = await Promise.all([
-        fetchDates('owned', { includePast: true }),
-        fetchDates('requested', { includePast: true }),
-      ]);
-      const combined = [...ownedAll, ...requestedAll];
-      const byId = new Map<string, DateListItem>();
-      combined
-        .filter((item) => isPastDate(item.scheduledTime))
-        .forEach((item) => byId.set(item.id, item));
-      const sortedPast = Array.from(byId.values()).sort(
-        (a, b) => new Date(b.scheduledTime).getTime() - new Date(a.scheduledTime).getTime(),
-      );
-      setPastDates(sortedPast);
-      setShowPastDates(true);
-    } catch (err) {
-      if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
-        setToken(null);
-        setTokenValue(null);
-        return;
-      }
-      setError(err instanceof Error ? err.message : 'Failed to load past dates.');
-    } finally {
-      setLoadingPastDates(false);
-    }
-  };
 
   const refreshAuth = useCallback(() => {
     getToken().then((storedToken) => {
@@ -129,33 +138,160 @@ export default function MyDatesScreen() {
     );
   }
 
+  const modeTitle = (() => {
+    switch (viewMode) {
+      case 'requested':
+        return 'Requested by me';
+      case 'accepted':
+        return 'Accepted / joined';
+      case 'past':
+        return 'Past dates';
+      case 'created':
+      default:
+        return 'Created by me';
+    }
+  })();
+
+  const modeSubtitle = (() => {
+    switch (viewMode) {
+      case 'requested':
+        return 'Requests waiting for acceptance';
+      case 'accepted':
+        return 'Dates where your request was accepted';
+      case 'past':
+        return 'Previously scheduled dates';
+      case 'created':
+      default:
+        return 'Your upcoming created dates';
+    }
+  })();
+
+  const currentData = (() => {
+    switch (viewMode) {
+      case 'requested':
+        return requestedDates;
+      case 'accepted':
+        return acceptedDates;
+      case 'past':
+        return pastDates;
+      case 'created':
+      default:
+        return createdDates;
+    }
+  })();
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Dates</Text>
-        <Text style={styles.subtitle}>Created and requested dates</Text>
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.title}>My Dates</Text>
+          <Text style={styles.subtitle}>{modeSubtitle}</Text>
+        </View>
+        <View style={styles.optionsMenuWrap}>
+          <Pressable
+            style={({ pressed }) => [styles.optionsTrigger, pressed && styles.buttonPressed]}
+            onPress={() => setShowOptionsMenu((prev) => !prev)}
+          >
+            <MaterialIcons name="more-vert" size={18} color="#1b1b1f" />
+            <Text style={styles.optionsTriggerText}>Options</Text>
+          </Pressable>
+          {showOptionsMenu ? (
+            <View style={styles.optionsMenu}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.optionItem,
+                  viewMode === 'created' && styles.optionItemActive,
+                  pressed && styles.optionPressed,
+                ]}
+                onPress={() => {
+                  setViewMode('created');
+                  setShowOptionsMenu(false);
+                }}
+              >
+                <MaterialIcons
+                  name={viewMode === 'created' ? 'check-circle' : 'radio-button-unchecked'}
+                  size={16}
+                  color={viewMode === 'created' ? '#ff5c8a' : '#8a8a95'}
+                />
+                <Text style={styles.optionItemText}>Show created dates</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.optionItem,
+                  viewMode === 'requested' && styles.optionItemActive,
+                  pressed && styles.optionPressed,
+                ]}
+                onPress={() => {
+                  setViewMode('requested');
+                  setShowOptionsMenu(false);
+                }}
+              >
+                <MaterialIcons
+                  name={viewMode === 'requested' ? 'check-circle' : 'radio-button-unchecked'}
+                  size={16}
+                  color={viewMode === 'requested' ? '#ff5c8a' : '#8a8a95'}
+                />
+                <Text style={styles.optionItemText}>Show requested dates</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.optionItem,
+                  viewMode === 'accepted' && styles.optionItemActive,
+                  pressed && styles.optionPressed,
+                ]}
+                onPress={() => {
+                  setViewMode('accepted');
+                  setShowOptionsMenu(false);
+                }}
+              >
+                <MaterialIcons
+                  name={viewMode === 'accepted' ? 'check-circle' : 'radio-button-unchecked'}
+                  size={16}
+                  color={viewMode === 'accepted' ? '#ff5c8a' : '#8a8a95'}
+                />
+                <Text style={styles.optionItemText}>Show accepted dates</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.optionItem,
+                  viewMode === 'past' && styles.optionItemActive,
+                  pressed && styles.optionPressed,
+                ]}
+                onPress={() => {
+                  setViewMode('past');
+                  setShowOptionsMenu(false);
+                }}
+              >
+                <MaterialIcons
+                  name={viewMode === 'past' ? 'check-circle' : 'radio-button-unchecked'}
+                  size={16}
+                  color={viewMode === 'past' ? '#ff5c8a' : '#8a8a95'}
+                />
+                <Text style={styles.optionItemText}>View past dates</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
       </View>
+      <Text style={styles.sectionTitle}>{modeTitle}</Text>
       {loading ? <ActivityIndicator /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <SectionList
-        sections={sections}
+      <FlatList
+        data={currentData}
         keyExtractor={(item) => item.id}
-        renderSectionHeader={({ section }) => (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            {section.data.length === 0 ? (
-              <Text style={styles.sectionEmpty}>No dates yet.</Text>
-            ) : null}
-          </View>
-        )}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push(`/date/${item.id}`)}
-            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+            style={({ pressed }) => [
+              viewMode === 'past' ? styles.pastCard : styles.card,
+              pressed && styles.cardPressed,
+            ]}
           >
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardLocation}>{item.location}</Text>
-            <Text style={styles.cardTime}>{formatDisplayDateTime(item.scheduledTime)}</Text>
+            <Text style={viewMode === 'past' ? styles.pastCardTitle : styles.cardTitle}>{item.title}</Text>
+            <Text style={viewMode === 'past' ? styles.pastCardText : styles.cardLocation}>{item.location}</Text>
+            <Text style={viewMode === 'past' ? styles.pastCardText : styles.cardTime}>
+              {formatDisplayDateTime(item.scheduledTime)}
+            </Text>
           </Pressable>
         )}
         showsVerticalScrollIndicator={false}
@@ -163,38 +299,12 @@ export default function MyDatesScreen() {
         ListEmptyComponent={
           !loading ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No dates yet.</Text>
-              <Text style={styles.emptyText}>Create a date or request to join one.</Text>
+              <Text style={styles.emptyTitle}>No dates in this view.</Text>
+              <Text style={styles.emptyText}>Use Options to switch between created, requested, accepted, and past.</Text>
             </View>
           ) : null
         }
       />
-      {!showPastDates ? (
-        <Pressable style={styles.togglePastButton} onPress={loadPastDates} disabled={loadingPastDates}>
-          <Text style={styles.togglePastText}>
-            {loadingPastDates ? 'Loading past dates...' : 'View past dates'}
-          </Text>
-        </Pressable>
-      ) : (
-        <View style={styles.pastSection}>
-          <Text style={styles.sectionTitle}>Past dates</Text>
-          {pastDates.length === 0 ? <Text style={styles.sectionEmpty}>No past dates.</Text> : null}
-          {pastDates.map((item) => (
-            <Pressable
-              key={item.id}
-              onPress={() => router.push(`/date/${item.id}`)}
-              style={({ pressed }) => [styles.pastCard, pressed && styles.cardPressed]}
-            >
-              <Text style={styles.pastCardTitle}>{item.title}</Text>
-              <Text style={styles.pastCardText}>{item.location}</Text>
-              <Text style={styles.pastCardText}>{formatDisplayDateTime(item.scheduledTime)}</Text>
-            </Pressable>
-          ))}
-          <Pressable style={styles.togglePastButton} onPress={() => setShowPastDates(false)}>
-            <Text style={styles.togglePastText}>Hide past dates</Text>
-          </Pressable>
-        </View>
-      )}
     </SafeAreaView>
   );
 }
@@ -207,8 +317,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#f7f7fb',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     marginBottom: 16,
     gap: 4,
+  },
+  headerTextWrap: {
+    flex: 1,
+    paddingRight: 8,
   },
   title: {
     fontSize: 24,
@@ -222,19 +339,11 @@ const styles = StyleSheet.create({
     color: '#b00020',
     marginBottom: 12,
   },
-  sectionHeader: {
-    marginTop: 12,
-    marginBottom: 6,
-    gap: 4,
-  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1b1b1f',
-  },
-  sectionEmpty: {
-    color: '#7a7a86',
-    fontSize: 12,
+    marginBottom: 8,
   },
   card: {
     backgroundColor: 'rgba(255, 92, 138, 0.18)',
@@ -261,23 +370,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   listContent: {
-    paddingBottom: 12,
-  },
-  togglePastButton: {
-    marginTop: 8,
-    marginBottom: 16,
-    backgroundColor: '#f0f0f4',
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  togglePastText: {
-    color: '#1b1b1f',
-    fontWeight: '600',
-  },
-  pastSection: {
-    marginBottom: 24,
-    gap: 8,
+    paddingBottom: 24,
   },
   pastCard: {
     backgroundColor: '#efeff4',
@@ -293,6 +386,63 @@ const styles = StyleSheet.create({
   pastCardText: {
     color: '#90909b',
     marginTop: 4,
+  },
+  optionsMenuWrap: {
+    alignItems: 'flex-end',
+    position: 'relative',
+    zIndex: 20,
+  },
+  optionsTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#d8d8df',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#fff',
+  },
+  optionsTriggerText: {
+    color: '#1b1b1f',
+    fontWeight: '600',
+  },
+  optionsMenu: {
+    position: 'absolute',
+    top: 38,
+    right: 0,
+    width: 220,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ececf2',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  optionItemActive: {
+    backgroundColor: '#fff4f8',
+  },
+  optionItemText: {
+    color: '#1b1b1f',
+    fontWeight: '500',
+  },
+  optionPressed: {
+    backgroundColor: '#f7f7fb',
+  },
+  buttonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   emptyState: {
     alignItems: 'center',

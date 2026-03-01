@@ -13,7 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { DateChatMessage, fetchDateChatMessages, fetchProfile, sendDateChatMessage } from '@/lib/api';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { DateChatMessage, fetchDateById, fetchDateChatMessages, fetchProfile, sendDateChatMessage } from '@/lib/api';
 
 const ACCENT = '#ff5c8a';
 
@@ -22,6 +23,7 @@ export default function DateChatScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DateChatMessage[]>([]);
   const [draft, setDraft] = useState('');
+  const [dateTitle, setDateTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -44,6 +46,13 @@ export default function DateChatScreen() {
       .then((profile) => setCurrentUserId(profile.id))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!id) return;
+    fetchDateById(id)
+      .then((date) => setDateTitle(date.title ?? ''))
+      .catch(() => {});
+  }, [id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -80,6 +89,7 @@ export default function DateChatScreen() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
         <Text style={styles.title}>Chat</Text>
+        <Text style={styles.subtitle}>{dateTitle ? `Date: ${dateTitle}` : 'Date conversation'}</Text>
         {loading ? <ActivityIndicator /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <ScrollView style={styles.messages} contentContainerStyle={styles.messagesContent}>
@@ -87,11 +97,23 @@ export default function DateChatScreen() {
           {messages.map((message) => {
             const mine = currentUserId != null && message.senderId === currentUserId;
             return (
-              <View key={message.id} style={[styles.messageBubble, mine ? styles.myMessage : styles.theirMessage]}>
-                <Text style={[styles.messageText, mine ? styles.myMessageText : undefined]}>{message.message}</Text>
-                <Text style={[styles.metaText, mine ? styles.myMetaText : undefined]}>
-                  {new Date(message.createdAt).toLocaleString()}
-                </Text>
+              <View key={message.id} style={[styles.messageRow, mine ? styles.myMessageRow : styles.theirMessageRow]}>
+                {!mine ? (
+                  <View style={styles.messageIcon}>
+                    <MaterialIcons name="person" size={16} color="#6b6b73" />
+                  </View>
+                ) : null}
+                <View style={[styles.messageBubble, mine ? styles.myMessage : styles.theirMessage]}>
+                  <Text style={[styles.messageText, mine ? styles.myMessageText : undefined]}>{message.message}</Text>
+                  <Text style={[styles.metaText, mine ? styles.myMetaText : undefined]}>
+                    {new Date(message.createdAt).toLocaleString()}
+                  </Text>
+                </View>
+                {mine ? (
+                  <View style={styles.messageIcon}>
+                    <MaterialIcons name="person" size={16} color="#fff" />
+                  </View>
+                ) : null}
               </View>
             );
           })}
@@ -126,7 +148,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: '#1b1b1f',
-    marginBottom: 8,
+  },
+  subtitle: {
+    color: '#6b6b73',
+    marginTop: 2,
+    marginBottom: 10,
   },
   error: {
     color: '#b00020',
@@ -150,12 +176,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  myMessageRow: {
+    justifyContent: 'flex-end',
+  },
+  theirMessageRow: {
+    justifyContent: 'flex-start',
+  },
+  messageIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f0f0f4',
+    marginBottom: 2,
+  },
   myMessage: {
-    alignSelf: 'flex-end',
     backgroundColor: ACCENT,
   },
   theirMessage: {
-    alignSelf: 'flex-start',
     backgroundColor: '#ececf2',
   },
   messageText: {
