@@ -427,6 +427,15 @@ export type AttendeeRequest = {
   status: 'ON_WAITLIST' | 'ACCEPTED' | 'REJECTED' | 'NOT_REQUESTED';
 };
 
+export type DateChatMessage = {
+  id: string;
+  dateId: string;
+  senderId: string;
+  recipientId: string;
+  message: string;
+  createdAt: string;
+};
+
 export async function fetchAttendeeStatus(dateId: string) {
   const response = await withAuthFetch(`/dates/${dateId}/attendees/status`);
 
@@ -486,4 +495,27 @@ export async function rejectAttendee(dateId: string, userId: string) {
   if (!response.ok) {
     throw new Error('Failed to reject attendee.');
   }
+}
+
+export async function fetchDateChatMessages(dateId: string): Promise<DateChatMessage[]> {
+  const response = await withAuthFetch(`/dates/${dateId}/chat/messages`);
+  if (!response.ok) {
+    throw new Error('Failed to load chat messages.');
+  }
+  const data = (await response.json()) as { messages?: DateChatMessage[] };
+  return data.messages ?? [];
+}
+
+export async function sendDateChatMessage(dateId: string, message: string): Promise<DateChatMessage> {
+  const response = await withAuthFetch(`/dates/${dateId}/chat/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to send message.');
+  }
+  return response.json();
 }

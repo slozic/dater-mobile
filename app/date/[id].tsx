@@ -275,6 +275,31 @@ export default function DateDetailsScreen() {
     }
   };
 
+  const handleOpenChat = async () => {
+    if (!id || !date || !currentUserId) return;
+    if (isPastDate(date.scheduledTime)) {
+      setActionMessage('Chat is disabled for past dates.');
+      return;
+    }
+    if (date.dateOwnerId === currentUserId) {
+      try {
+        const attendeeRequests = requestsLoaded ? requests : await fetchAttendeeRequests(id);
+        const accepted = attendeeRequests.find((request) => request.status === 'ACCEPTED');
+        if (!accepted) {
+          setActionMessage('Chat becomes available after accepting one attendee.');
+          return;
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to check chat availability.');
+        return;
+      }
+    } else if (joinStatus !== 'ACCEPTED') {
+      setActionMessage('Chat becomes available once your request is accepted.');
+      return;
+    }
+    router.push({ pathname: '/date/chat/[id]', params: { id } });
+  };
+
   const loadRequests = async () => {
     if (!id) return;
     setLoadingRequests(true);
@@ -513,6 +538,16 @@ export default function DateDetailsScreen() {
           )}
 
           {actionMessage ? <Text style={styles.notice}>{actionMessage}</Text> : null}
+
+          {!isPastDate(date.scheduledTime) &&
+          (date.dateOwnerId === currentUserId || joinStatus === 'ACCEPTED') ? (
+            <Pressable
+              style={({ pressed }) => [styles.primaryButton, styles.compactCtaButton, pressed && styles.buttonPressed]}
+              onPress={handleOpenChat}
+            >
+              <Text style={styles.primaryButtonText}>Open chat</Text>
+            </Pressable>
+          ) : null}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Images</Text>
