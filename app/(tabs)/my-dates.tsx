@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -6,8 +6,6 @@ import { useRouter } from 'expo-router';
 import LoginForm from '@/components/LoginForm';
 import { DateListItem, fetchDates, getToken } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-
-const ACCENT = '#ff5c8a';
 
 type SectionData = {
   title: string;
@@ -42,8 +40,11 @@ export default function MyDatesScreen() {
   const [loadingPastDates, setLoadingPastDates] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const loadingDatesRef = useRef(false);
 
-  const loadDates = async () => {
+  const loadDates = useCallback(async () => {
+    if (loadingDatesRef.current) return;
+    loadingDatesRef.current = true;
     setError('');
     setLoading(true);
     try {
@@ -63,8 +64,9 @@ export default function MyDatesScreen() {
       setError(err instanceof Error ? err.message : 'Failed to load dates.');
     } finally {
       setLoading(false);
+      loadingDatesRef.current = false;
     }
-  };
+  }, [setTokenValue]);
 
   const loadPastDates = async () => {
     setLoadingPastDates(true);
@@ -100,16 +102,12 @@ export default function MyDatesScreen() {
     getToken().then((storedToken) => {
       setToken(storedToken);
       if (storedToken) {
-        loadDates();
+        void loadDates();
       } else {
         setLoading(false);
       }
     });
-  }, []);
-
-  useEffect(() => {
-    refreshAuth();
-  }, [refreshAuth]);
+  }, [loadDates]);
 
   useFocusEffect(
     useCallback(() => {
@@ -123,10 +121,7 @@ export default function MyDatesScreen() {
         <View style={styles.loginWrapper}>
           <LoginForm
             onSuccess={() => {
-              getToken().then((storedToken) => {
-                setToken(storedToken);
-                loadDates();
-              });
+              refreshAuth();
             }}
           />
         </View>

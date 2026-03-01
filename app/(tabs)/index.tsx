@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -41,8 +41,11 @@ export default function DatesScreen() {
   const [longitude, setLongitude] = useState<number | null>(null);
   const [radiusKm, setRadiusKm] = useState('10');
   const [locationStatus, setLocationStatus] = useState('');
+  const loadingDatesRef = useRef(false);
 
-  const loadDates = async () => {
+  const loadDates = useCallback(async () => {
+    if (loadingDatesRef.current) return;
+    loadingDatesRef.current = true;
     setError('');
     setLoading(true);
     try {
@@ -71,8 +74,9 @@ export default function DatesScreen() {
       setError(err instanceof Error ? err.message : 'Failed to load dates.');
     } finally {
       setLoading(false);
+      loadingDatesRef.current = false;
     }
-  };
+  }, [latitude, longitude, radiusKm, setTokenValue]);
 
   const handleUseMyLocation = async () => {
     setLocationStatus('');
@@ -95,16 +99,12 @@ export default function DatesScreen() {
     getToken().then((storedToken) => {
       setToken(storedToken);
       if (storedToken) {
-        loadDates();
+        void loadDates();
       } else {
         setLoading(false);
       }
     });
-  }, []);
-
-  useEffect(() => {
-    refreshAuth();
-  }, [refreshAuth]);
+  }, [loadDates]);
 
   useFocusEffect(
     useCallback(() => {
@@ -118,10 +118,7 @@ export default function DatesScreen() {
         <View style={styles.loginWrapper}>
           <LoginForm
             onSuccess={() => {
-              getToken().then((storedToken) => {
-                setToken(storedToken);
-                loadDates();
-              });
+              refreshAuth();
             }}
           />
         </View>

@@ -4,6 +4,7 @@ import { API_BASE_URL } from './config';
 
 const ACCESS_TOKEN_KEY = 'dater_token';
 const REFRESH_TOKEN_KEY = 'dater_refresh_token';
+let refreshInFlight: Promise<string> | null = null;
 
 export async function getToken(): Promise<string | null> {
   if (Platform.OS === 'web') {
@@ -52,6 +53,10 @@ export async function clearToken(): Promise<void> {
 }
 
 async function refreshAccessToken(): Promise<string> {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+  refreshInFlight = (async () => {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) {
     throw new Error('AUTH_EXPIRED');
@@ -71,6 +76,12 @@ async function refreshAccessToken(): Promise<string> {
   await setToken(data.accessToken);
   await setRefreshToken(data.refreshToken);
   return data.accessToken;
+  })();
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
 }
 
 export async function login(username: string, password: string): Promise<string> {
