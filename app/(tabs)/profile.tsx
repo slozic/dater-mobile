@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   clearToken,
   deleteProfileImage,
@@ -45,6 +46,8 @@ export default function ProfileScreen() {
   const [images, setImages] = useState<Array<{ id: string; imageUrl: string | null }>>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [updatingDiscovery, setUpdatingDiscovery] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
 
   const loadProfile = async () => {
     setError('');
@@ -152,10 +155,27 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleLogout = async () => {
+    await clearToken();
+    setTokenValue(null);
+    router.replace('/(tabs)');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Profile</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Profile</Text>
+          <View style={styles.optionsMenuWrap}>
+            <Pressable
+              style={({ pressed }) => [styles.optionsTrigger, pressed && styles.buttonPressed]}
+              onPress={() => setShowSettingsMenu((prev) => !prev)}
+            >
+              <MaterialIcons name="more-vert" size={18} color="#fff" />
+              <Text style={styles.optionsTriggerText}>Settings</Text>
+            </Pressable>
+          </View>
+        </View>
         {loading ? <ActivityIndicator /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -180,12 +200,6 @@ export default function ProfileScreen() {
               </View>
             ))}
           </View>
-          <Pressable
-            style={({ pressed }) => [styles.primaryButton, styles.compactPrimaryButton, pressed && styles.buttonPressed]}
-            onPress={handlePickProfileImages}
-          >
-            <Text style={styles.primaryButtonText}>Upload photos</Text>
-          </Pressable>
         </View>
 
         {profile && !editing ? (
@@ -202,14 +216,6 @@ export default function ProfileScreen() {
             <Text style={styles.value}>{profile.birthday ?? '-'}</Text>
             <Text style={styles.rowLabel}>Gender</Text>
             <Text style={styles.value}>{profile.gender ?? '-'}</Text>
-            <View style={styles.sectionActions}>
-              <Pressable
-                style={({ pressed }) => [styles.primaryButton, styles.compactPrimaryButton, pressed && styles.buttonPressed]}
-                onPress={() => setEditing(true)}
-              >
-                <Text style={styles.primaryButtonText}>Edit Profile</Text>
-              </Pressable>
-            </View>
           </View>
         ) : null}
 
@@ -285,50 +291,96 @@ export default function ProfileScreen() {
           </View>
         ) : null}
 
-        <View style={styles.settingsCard}>
-          <Text style={styles.settingsTitle}>Settings</Text>
-          <Text style={styles.rowLabel}>Show dates from</Text>
-          <View style={styles.genderRow}>
-            {[
-              { id: 'ALL', label: 'All' },
-              { id: 'MALE', label: 'Male' },
-              { id: 'FEMALE', label: 'Female' },
-            ].map((option) => (
-              <Pressable
-                key={option.id}
-                style={[
-                  styles.genderOption,
-                  profile?.dateListGenderFilter?.toUpperCase() === option.id
-                    ? styles.genderOptionSelected
-                    : undefined,
-                ]}
-                onPress={() => updateDiscoveryFilter(option.id as 'ALL' | 'MALE' | 'FEMALE')}
-                disabled={updatingDiscovery}
-              >
-                <Text
-                  style={[
-                    styles.genderOptionText,
-                    profile?.dateListGenderFilter?.toUpperCase() === option.id
-                      ? styles.genderOptionTextSelected
-                      : undefined,
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <Pressable
-            style={({ pressed }) => [styles.outlineButton, styles.compactOutlineButton, pressed && styles.buttonPressed]}
-            onPress={async () => {
-              await clearToken();
-              setTokenValue(null);
-              router.replace('/(tabs)');
-            }}>
-            <Text style={styles.outlineButtonText}>Log out</Text>
-          </Pressable>
-        </View>
       </ScrollView>
+      <Modal visible={showSettingsMenu} transparent animationType="fade">
+        <View style={styles.menuModalRoot}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowSettingsMenu(false)} />
+          <View style={styles.menuModalAnchor}>
+            <View style={styles.optionsMenu}>
+              <Pressable
+                style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                onPress={() => {
+                  setEditing(true);
+                  setShowSettingsMenu(false);
+                }}
+              >
+                <MaterialIcons name="edit" size={16} color="#1b1b1f" />
+                <Text style={styles.optionItemText}>Edit profile</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                onPress={async () => {
+                  setShowSettingsMenu(false);
+                  await handlePickProfileImages();
+                }}
+              >
+                <MaterialIcons name="add-photo-alternate" size={16} color="#1b1b1f" />
+                <Text style={styles.optionItemText}>Upload photos</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                onPress={() => {
+                  setShowDiscoveryModal(true);
+                  setShowSettingsMenu(false);
+                }}
+              >
+                <MaterialIcons name="tune" size={16} color="#1b1b1f" />
+                <Text style={styles.optionItemText}>Date feed</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                onPress={handleLogout}
+              >
+                <MaterialIcons name="logout" size={16} color="#c1121f" />
+                <Text style={[styles.optionItemText, styles.optionDangerText]}>Log out</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={showDiscoveryModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowDiscoveryModal(false)} />
+          <View style={styles.discoveryModalCard}>
+            <Text style={styles.discoveryModalTitle}>Show dates from</Text>
+            <View style={styles.genderRow}>
+              {[
+                { id: 'ALL', label: 'All' },
+                { id: 'MALE', label: 'Male' },
+                { id: 'FEMALE', label: 'Female' },
+              ].map((option) => (
+                <Pressable
+                  key={option.id}
+                  style={[
+                    styles.genderOption,
+                    profile?.dateListGenderFilter?.toUpperCase() === option.id ? styles.genderOptionSelected : undefined,
+                  ]}
+                  onPress={() => updateDiscoveryFilter(option.id as 'ALL' | 'MALE' | 'FEMALE')}
+                  disabled={updatingDiscovery}
+                >
+                  <Text
+                    style={[
+                      styles.genderOptionText,
+                      profile?.dateListGenderFilter?.toUpperCase() === option.id
+                        ? styles.genderOptionTextSelected
+                        : undefined,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            {updatingDiscovery ? <ActivityIndicator /> : null}
+            <Pressable
+              style={({ pressed }) => [styles.modalCloseAction, pressed && styles.buttonPressed]}
+              onPress={() => setShowDiscoveryModal(false)}
+            >
+              <Text style={styles.modalCloseActionText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={Boolean(previewImage)} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setPreviewImage(null)} />
@@ -353,10 +405,15 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     gap: 16,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    marginBottom: 12,
     color: '#1b1b1f',
   },
   error: {
@@ -442,9 +499,6 @@ const styles = StyleSheet.create({
   actionButton: {
     flex: 1,
   },
-  sectionActions: {
-    marginTop: 12,
-  },
   primaryButton: {
     backgroundColor: ACCENT,
     paddingVertical: 10,
@@ -467,12 +521,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     flex: 1,
-  },
-  compactOutlineButton: {
-    alignSelf: 'center',
-    width: 180,
-    paddingHorizontal: 16,
-    flex: 0,
   },
   outlineButtonText: {
     color: ACCENT,
@@ -510,21 +558,83 @@ const styles = StyleSheet.create({
   genderOptionTextSelected: {
     color: ACCENT,
   },
-  settingsCard: {
+  optionsMenuWrap: {
+    alignItems: 'flex-end',
+  },
+  menuModalRoot: {
+    flex: 1,
+  },
+  menuModalAnchor: {
+    alignItems: 'flex-end',
+    marginTop: 88,
+    paddingHorizontal: 16,
+  },
+  optionsTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ff5c8a',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  optionsTriggerText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  optionsMenu: {
+    width: 210,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ececf2',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  optionItemText: {
+    color: '#1b1b1f',
+    fontWeight: '500',
+  },
+  optionDangerText: {
+    color: '#c1121f',
+  },
+  optionPressed: {
+    backgroundColor: '#f7f7fb',
+  },
+  discoveryModalCard: {
+    width: '100%',
     backgroundColor: '#fff',
     borderRadius: 14,
     padding: 16,
     gap: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
-  settingsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+  discoveryModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#1b1b1f',
+  },
+  modalCloseAction: {
+    alignSelf: 'flex-end',
+    borderWidth: 1,
+    borderColor: ACCENT,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  modalCloseActionText: {
+    color: ACCENT,
+    fontWeight: '600',
   },
   modalBackdrop: {
     flex: 1,

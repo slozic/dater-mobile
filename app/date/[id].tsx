@@ -401,64 +401,9 @@ export default function DateDetailsScreen() {
                   style={({ pressed }) => [styles.optionsTrigger, pressed && styles.buttonPressed]}
                   onPress={() => setShowOptionsMenu((prev) => !prev)}
                 >
-                  <MaterialIcons name="more-vert" size={18} color="#1b1b1f" />
+                  <MaterialIcons name="more-vert" size={18} color="#fff" />
                   <Text style={styles.optionsTriggerText}>Options</Text>
                 </Pressable>
-                {showOptionsMenu ? (
-                  <View style={styles.optionsMenu}>
-                    {canEditDate ? (
-                      <Pressable
-                        style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
-                        onPress={() => {
-                          setEditing(true);
-                          setShowOptionsMenu(false);
-                        }}
-                      >
-                        <MaterialIcons name="edit" size={16} color="#1b1b1f" />
-                        <Text style={styles.optionItemText}>Edit date</Text>
-                      </Pressable>
-                    ) : null}
-                    {canDeleteDate ? (
-                      <Pressable
-                        style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
-                        onPress={() => {
-                          setShowOptionsMenu(false);
-                          Alert.alert('Delete date?', 'This will permanently delete this date.', [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Delete', style: 'destructive', onPress: handleDeleteDate },
-                          ]);
-                        }}
-                        disabled={deletingDate}
-                      >
-                        <MaterialIcons name="delete-outline" size={16} color="#c1121f" />
-                        <Text style={[styles.optionItemText, styles.optionDangerText]}>
-                          {deletingDate ? 'Deleting...' : 'Delete date'}
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                    {canOpenChat ? (
-                      <Pressable
-                        style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
-                        onPress={handleOpenChat}
-                      >
-                        <MaterialIcons name="chat-bubble-outline" size={16} color="#1b1b1f" />
-                        <Text style={styles.optionItemText}>Open chat</Text>
-                      </Pressable>
-                    ) : null}
-                    {canUploadImages ? (
-                      <Pressable
-                        style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
-                        onPress={async () => {
-                          setShowOptionsMenu(false);
-                          await handlePickImages();
-                        }}
-                      >
-                        <MaterialIcons name="add-photo-alternate" size={16} color="#1b1b1f" />
-                        <Text style={styles.optionItemText}>Upload images</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
               </View>
             );
           })()}
@@ -749,6 +694,69 @@ export default function DateDetailsScreen() {
         </View>
         </ScrollView>
       ) : null}
+      {date ? (
+        <Modal visible={showOptionsMenu} transparent animationType="fade">
+          <View style={styles.menuModalRoot}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowOptionsMenu(false)} />
+            <View style={styles.menuModalAnchor}>
+              <View style={styles.optionsMenu}>
+                {date.dateOwnerId === currentUserId && !isPastDate(date.scheduledTime) && !editing ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                    onPress={() => {
+                      setEditing(true);
+                      setShowOptionsMenu(false);
+                    }}
+                  >
+                    <MaterialIcons name="edit" size={16} color="#1b1b1f" />
+                    <Text style={styles.optionItemText}>Edit date</Text>
+                  </Pressable>
+                ) : null}
+                {date.dateOwnerId === currentUserId && !editing ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                    onPress={() => {
+                      setShowOptionsMenu(false);
+                      Alert.alert('Delete date?', 'This will permanently delete this date.', [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete', style: 'destructive', onPress: handleDeleteDate },
+                      ]);
+                    }}
+                    disabled={deletingDate}
+                  >
+                    <MaterialIcons name="delete-outline" size={16} color="#c1121f" />
+                    <Text style={[styles.optionItemText, styles.optionDangerText]}>
+                      {deletingDate ? 'Deleting...' : 'Delete date'}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {!isPastDate(date.scheduledTime) &&
+                (date.dateOwnerId === currentUserId || joinStatus === 'ACCEPTED') ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                    onPress={handleOpenChat}
+                  >
+                    <MaterialIcons name="chat-bubble-outline" size={16} color="#1b1b1f" />
+                    <Text style={styles.optionItemText}>Open chat</Text>
+                  </Pressable>
+                ) : null}
+                {date.dateOwnerId === currentUserId && !isPastDate(date.scheduledTime) ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
+                    onPress={async () => {
+                      setShowOptionsMenu(false);
+                      await handlePickImages();
+                    }}
+                  >
+                    <MaterialIcons name="add-photo-alternate" size={16} color="#1b1b1f" />
+                    <Text style={styles.optionItemText}>Upload images</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
       <Modal visible={Boolean(previewImage)} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setPreviewImage(null)} />
@@ -838,29 +846,30 @@ const styles = StyleSheet.create({
   },
   optionsMenuWrap: {
     alignItems: 'flex-end',
-    position: 'relative',
-    zIndex: 20,
     marginBottom: 8,
+  },
+  menuModalRoot: {
+    flex: 1,
+  },
+  menuModalAnchor: {
+    alignItems: 'flex-end',
+    marginTop: 130,
+    paddingHorizontal: 16,
   },
   optionsTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderWidth: 1,
-    borderColor: '#d8d8df',
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#ff5c8a',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
   optionsTriggerText: {
-    color: '#1b1b1f',
+    color: '#fff',
     fontWeight: '600',
   },
   optionsMenu: {
-    position: 'absolute',
-    top: 38,
-    right: 0,
     width: 210,
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -871,7 +880,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    elevation: 8,
   },
   optionItem: {
     flexDirection: 'row',

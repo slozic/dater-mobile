@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
@@ -138,20 +138,6 @@ export default function MyDatesScreen() {
     );
   }
 
-  const modeTitle = (() => {
-    switch (viewMode) {
-      case 'requested':
-        return 'Requested by me';
-      case 'accepted':
-        return 'Accepted / joined';
-      case 'past':
-        return 'Past dates';
-      case 'created':
-      default:
-        return 'Created by me';
-    }
-  })();
-
   const modeSubtitle = (() => {
     switch (viewMode) {
       case 'requested':
@@ -192,10 +178,46 @@ export default function MyDatesScreen() {
             style={({ pressed }) => [styles.optionsTrigger, pressed && styles.buttonPressed]}
             onPress={() => setShowOptionsMenu((prev) => !prev)}
           >
-            <MaterialIcons name="more-vert" size={18} color="#1b1b1f" />
+            <MaterialIcons name="more-vert" size={18} color="#fff" />
             <Text style={styles.optionsTriggerText}>Options</Text>
           </Pressable>
-          {showOptionsMenu ? (
+        </View>
+      </View>
+      {loading ? <ActivityIndicator /> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <FlatList
+        data={currentData}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={() => router.push(`/date/${item.id}`)}
+            style={({ pressed }) => [
+              viewMode === 'past' ? styles.pastCard : styles.card,
+              pressed && styles.cardPressed,
+            ]}
+          >
+            <Text style={viewMode === 'past' ? styles.pastCardTitle : styles.cardTitle}>{item.title}</Text>
+            <Text style={viewMode === 'past' ? styles.pastCardText : styles.cardLocation}>{item.location}</Text>
+            <Text style={viewMode === 'past' ? styles.pastCardText : styles.cardTime}>
+              {formatDisplayDateTime(item.scheduledTime)}
+            </Text>
+          </Pressable>
+        )}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No dates in this view.</Text>
+              <Text style={styles.emptyText}>Use Options to switch between created, requested, accepted, and past.</Text>
+            </View>
+          ) : null
+        }
+      />
+      <Modal visible={showOptionsMenu} transparent animationType="fade">
+        <View style={styles.menuModalRoot}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowOptionsMenu(false)} />
+          <View style={styles.menuModalAnchor}>
             <View style={styles.optionsMenu}>
               <Pressable
                 style={({ pressed }) => [
@@ -270,41 +292,9 @@ export default function MyDatesScreen() {
                 <Text style={styles.optionItemText}>View past dates</Text>
               </Pressable>
             </View>
-          ) : null}
+          </View>
         </View>
-      </View>
-      <Text style={styles.sectionTitle}>{modeTitle}</Text>
-      {loading ? <ActivityIndicator /> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <FlatList
-        data={currentData}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => router.push(`/date/${item.id}`)}
-            style={({ pressed }) => [
-              viewMode === 'past' ? styles.pastCard : styles.card,
-              pressed && styles.cardPressed,
-            ]}
-          >
-            <Text style={viewMode === 'past' ? styles.pastCardTitle : styles.cardTitle}>{item.title}</Text>
-            <Text style={viewMode === 'past' ? styles.pastCardText : styles.cardLocation}>{item.location}</Text>
-            <Text style={viewMode === 'past' ? styles.pastCardText : styles.cardTime}>
-              {formatDisplayDateTime(item.scheduledTime)}
-            </Text>
-          </Pressable>
-        )}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          !loading ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No dates in this view.</Text>
-              <Text style={styles.emptyText}>Use Options to switch between created, requested, accepted, and past.</Text>
-            </View>
-          ) : null
-        }
-      />
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -338,12 +328,6 @@ const styles = StyleSheet.create({
   error: {
     color: '#b00020',
     marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1b1b1f',
-    marginBottom: 8,
   },
   card: {
     backgroundColor: 'rgba(255, 92, 138, 0.18)',
@@ -389,28 +373,29 @@ const styles = StyleSheet.create({
   },
   optionsMenuWrap: {
     alignItems: 'flex-end',
-    position: 'relative',
-    zIndex: 20,
+  },
+  menuModalRoot: {
+    flex: 1,
+  },
+  menuModalAnchor: {
+    alignItems: 'flex-end',
+    marginTop: 88,
+    paddingHorizontal: 16,
   },
   optionsTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderWidth: 1,
-    borderColor: '#d8d8df',
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#ff5c8a',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
   optionsTriggerText: {
-    color: '#1b1b1f',
+    color: '#fff',
     fontWeight: '600',
   },
   optionsMenu: {
-    position: 'absolute',
-    top: 38,
-    right: 0,
     width: 220,
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -421,7 +406,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    elevation: 8,
   },
   optionItem: {
     flexDirection: 'row',

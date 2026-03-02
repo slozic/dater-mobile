@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useHeaderHeight } from '@react-navigation/elements';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { DateChatMessage, fetchDateById, fetchDateChatMessages, fetchProfile, sendDateChatMessage } from '@/lib/api';
 
@@ -20,6 +21,7 @@ const ACCENT = '#ff5c8a';
 
 export default function DateChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const headerHeight = useHeaderHeight();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DateChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -87,12 +89,19 @@ export default function DateChatScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
-        <Text style={styles.title}>Chat</Text>
-        <Text style={styles.subtitle}>{dateTitle ? `Date: ${dateTitle}` : 'Date conversation'}</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
+        style={styles.container}
+      >
+        <Text style={styles.subtitle}>{dateTitle || 'Date conversation'}</Text>
         {loading ? <ActivityIndicator /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <ScrollView style={styles.messages} contentContainerStyle={styles.messagesContent}>
+        <ScrollView
+          style={styles.messages}
+          contentContainerStyle={styles.messagesContent}
+          keyboardShouldPersistTaps="handled"
+        >
           {messages.length === 0 ? <Text style={styles.emptyText}>No messages yet.</Text> : null}
           {messages.map((message) => {
             const mine = currentUserId != null && message.senderId === currentUserId;
@@ -144,14 +153,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1b1b1f',
-  },
   subtitle: {
-    color: '#6b6b73',
-    marginTop: 2,
+    color: '#1b1b1f',
+    fontSize: 18,
+    fontWeight: '600',
     marginBottom: 10,
   },
   error: {
