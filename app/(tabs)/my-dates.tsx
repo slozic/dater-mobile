@@ -1,10 +1,12 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import LoginForm from '@/components/LoginForm';
+import { ActionPillButton } from '@/components/ui/ActionPillButton';
+import { OptionsMenuItem } from '@/components/ui/OptionsMenuItem';
+import { OptionsPopover } from '@/components/ui/OptionsPopover';
 import { DateListItem, fetchAttendeeStatus, fetchDates, getToken } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
@@ -174,13 +176,7 @@ export default function MyDatesScreen() {
           <Text style={styles.subtitle}>{modeSubtitle}</Text>
         </View>
         <View style={styles.optionsMenuWrap}>
-          <Pressable
-            style={({ pressed }) => [styles.optionsTrigger, pressed && styles.buttonPressed]}
-            onPress={() => setShowOptionsMenu((prev) => !prev)}
-          >
-            <MaterialIcons name="more-vert" size={18} color="#fff" />
-            <Text style={styles.optionsTriggerText}>Options</Text>
-          </Pressable>
+          <ActionPillButton label="Options" onPress={() => setShowOptionsMenu((prev) => !prev)} />
         </View>
       </View>
       {loading ? <ActivityIndicator /> : null}
@@ -214,87 +210,48 @@ export default function MyDatesScreen() {
           ) : null
         }
       />
-      <Modal visible={showOptionsMenu} transparent animationType="fade">
-        <View style={styles.menuModalRoot}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowOptionsMenu(false)} />
-          <View style={styles.menuModalAnchor}>
-            <View style={styles.optionsMenu}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.optionItem,
-                  viewMode === 'created' && styles.optionItemActive,
-                  pressed && styles.optionPressed,
-                ]}
-                onPress={() => {
-                  setViewMode('created');
-                  setShowOptionsMenu(false);
-                }}
-              >
-                <MaterialIcons
-                  name={viewMode === 'created' ? 'check-circle' : 'radio-button-unchecked'}
-                  size={16}
-                  color={viewMode === 'created' ? '#ff5c8a' : '#8a8a95'}
-                />
-                <Text style={styles.optionItemText}>Show created dates</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.optionItem,
-                  viewMode === 'requested' && styles.optionItemActive,
-                  pressed && styles.optionPressed,
-                ]}
-                onPress={() => {
-                  setViewMode('requested');
-                  setShowOptionsMenu(false);
-                }}
-              >
-                <MaterialIcons
-                  name={viewMode === 'requested' ? 'check-circle' : 'radio-button-unchecked'}
-                  size={16}
-                  color={viewMode === 'requested' ? '#ff5c8a' : '#8a8a95'}
-                />
-                <Text style={styles.optionItemText}>Show requested dates</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.optionItem,
-                  viewMode === 'accepted' && styles.optionItemActive,
-                  pressed && styles.optionPressed,
-                ]}
-                onPress={() => {
-                  setViewMode('accepted');
-                  setShowOptionsMenu(false);
-                }}
-              >
-                <MaterialIcons
-                  name={viewMode === 'accepted' ? 'check-circle' : 'radio-button-unchecked'}
-                  size={16}
-                  color={viewMode === 'accepted' ? '#ff5c8a' : '#8a8a95'}
-                />
-                <Text style={styles.optionItemText}>Show accepted dates</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.optionItem,
-                  viewMode === 'past' && styles.optionItemActive,
-                  pressed && styles.optionPressed,
-                ]}
-                onPress={() => {
-                  setViewMode('past');
-                  setShowOptionsMenu(false);
-                }}
-              >
-                <MaterialIcons
-                  name={viewMode === 'past' ? 'check-circle' : 'radio-button-unchecked'}
-                  size={16}
-                  color={viewMode === 'past' ? '#ff5c8a' : '#8a8a95'}
-                />
-                <Text style={styles.optionItemText}>View past dates</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <OptionsPopover visible={showOptionsMenu} onClose={() => setShowOptionsMenu(false)} topOffset={88} width={220}>
+        <OptionsMenuItem
+          active={viewMode === 'created'}
+          iconName={viewMode === 'created' ? 'check-circle' : 'radio-button-unchecked'}
+          iconColor={viewMode === 'created' ? '#ff5c8a' : '#8a8a95'}
+          label="Show created dates"
+          onPress={() => {
+            setViewMode('created');
+            setShowOptionsMenu(false);
+          }}
+        />
+        <OptionsMenuItem
+          active={viewMode === 'requested'}
+          iconName={viewMode === 'requested' ? 'check-circle' : 'radio-button-unchecked'}
+          iconColor={viewMode === 'requested' ? '#ff5c8a' : '#8a8a95'}
+          label="Show requested dates"
+          onPress={() => {
+            setViewMode('requested');
+            setShowOptionsMenu(false);
+          }}
+        />
+        <OptionsMenuItem
+          active={viewMode === 'accepted'}
+          iconName={viewMode === 'accepted' ? 'check-circle' : 'radio-button-unchecked'}
+          iconColor={viewMode === 'accepted' ? '#ff5c8a' : '#8a8a95'}
+          label="Show accepted dates"
+          onPress={() => {
+            setViewMode('accepted');
+            setShowOptionsMenu(false);
+          }}
+        />
+        <OptionsMenuItem
+          active={viewMode === 'past'}
+          iconName={viewMode === 'past' ? 'check-circle' : 'radio-button-unchecked'}
+          iconColor={viewMode === 'past' ? '#ff5c8a' : '#8a8a95'}
+          label="View past dates"
+          onPress={() => {
+            setViewMode('past');
+            setShowOptionsMenu(false);
+          }}
+        />
+      </OptionsPopover>
     </SafeAreaView>
   );
 }
@@ -373,57 +330,6 @@ const styles = StyleSheet.create({
   },
   optionsMenuWrap: {
     alignItems: 'flex-end',
-  },
-  menuModalRoot: {
-    flex: 1,
-  },
-  menuModalAnchor: {
-    alignItems: 'flex-end',
-    marginTop: 88,
-    paddingHorizontal: 16,
-  },
-  optionsTrigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#ff5c8a',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  optionsTriggerText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  optionsMenu: {
-    width: 220,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#ececf2',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-  },
-  optionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  optionItemActive: {
-    backgroundColor: '#fff4f8',
-  },
-  optionItemText: {
-    color: '#1b1b1f',
-    fontWeight: '500',
-  },
-  optionPressed: {
-    backgroundColor: '#f7f7fb',
   },
   buttonPressed: {
     opacity: 0.85,

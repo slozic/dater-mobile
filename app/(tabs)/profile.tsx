@@ -13,7 +13,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { ActionPillButton } from '@/components/ui/ActionPillButton';
+import { OptionsMenuItem } from '@/components/ui/OptionsMenuItem';
+import { OptionsPopover } from '@/components/ui/OptionsPopover';
 import {
   clearToken,
   deleteProfileImage,
@@ -167,13 +169,7 @@ export default function ProfileScreen() {
         <View style={styles.headerRow}>
           <Text style={styles.title}>Profile</Text>
           <View style={styles.optionsMenuWrap}>
-            <Pressable
-              style={({ pressed }) => [styles.optionsTrigger, pressed && styles.buttonPressed]}
-              onPress={() => setShowSettingsMenu((prev) => !prev)}
-            >
-              <MaterialIcons name="more-vert" size={18} color="#fff" />
-              <Text style={styles.optionsTriggerText}>Settings</Text>
-            </Pressable>
+            <ActionPillButton label="Settings" onPress={() => setShowSettingsMenu((prev) => !prev)} />
           </View>
         </View>
         {loading ? <ActivityIndicator /> : null}
@@ -292,52 +288,39 @@ export default function ProfileScreen() {
         ) : null}
 
       </ScrollView>
-      <Modal visible={showSettingsMenu} transparent animationType="fade">
-        <View style={styles.menuModalRoot}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowSettingsMenu(false)} />
-          <View style={styles.menuModalAnchor}>
-            <View style={styles.optionsMenu}>
-              <Pressable
-                style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
-                onPress={() => {
-                  setEditing(true);
-                  setShowSettingsMenu(false);
-                }}
-              >
-                <MaterialIcons name="edit" size={16} color="#1b1b1f" />
-                <Text style={styles.optionItemText}>Edit profile</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
-                onPress={async () => {
-                  setShowSettingsMenu(false);
-                  await handlePickProfileImages();
-                }}
-              >
-                <MaterialIcons name="add-photo-alternate" size={16} color="#1b1b1f" />
-                <Text style={styles.optionItemText}>Upload photos</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
-                onPress={() => {
-                  setShowDiscoveryModal(true);
-                  setShowSettingsMenu(false);
-                }}
-              >
-                <MaterialIcons name="tune" size={16} color="#1b1b1f" />
-                <Text style={styles.optionItemText}>Date feed</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.optionItem, pressed && styles.optionPressed]}
-                onPress={handleLogout}
-              >
-                <MaterialIcons name="logout" size={16} color="#c1121f" />
-                <Text style={[styles.optionItemText, styles.optionDangerText]}>Log out</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <OptionsPopover visible={showSettingsMenu} onClose={() => setShowSettingsMenu(false)} topOffset={88} width={210}>
+        <OptionsMenuItem
+          iconName="edit"
+          label="Edit profile"
+          onPress={() => {
+            setEditing(true);
+            setShowSettingsMenu(false);
+          }}
+        />
+        <OptionsMenuItem
+          iconName="add-photo-alternate"
+          label="Upload photos"
+          onPress={async () => {
+            setShowSettingsMenu(false);
+            await handlePickProfileImages();
+          }}
+        />
+        <OptionsMenuItem
+          iconName="tune"
+          label="Date feed"
+          onPress={() => {
+            setShowDiscoveryModal(true);
+            setShowSettingsMenu(false);
+          }}
+        />
+        <OptionsMenuItem
+          iconName="logout"
+          iconColor="#c1121f"
+          label="Log out"
+          destructive
+          onPress={handleLogout}
+        />
+      </OptionsPopover>
       <Modal visible={showDiscoveryModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowDiscoveryModal(false)} />
@@ -560,57 +543,6 @@ const styles = StyleSheet.create({
   },
   optionsMenuWrap: {
     alignItems: 'flex-end',
-  },
-  menuModalRoot: {
-    flex: 1,
-  },
-  menuModalAnchor: {
-    alignItems: 'flex-end',
-    marginTop: 88,
-    paddingHorizontal: 16,
-  },
-  optionsTrigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#ff5c8a',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  optionsTriggerText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  optionsMenu: {
-    width: 210,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#ececf2',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-  },
-  optionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  optionItemText: {
-    color: '#1b1b1f',
-    fontWeight: '500',
-  },
-  optionDangerText: {
-    color: '#c1121f',
-  },
-  optionPressed: {
-    backgroundColor: '#f7f7fb',
   },
   discoveryModalCard: {
     width: '100%',
