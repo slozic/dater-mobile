@@ -14,13 +14,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { ActionPillButton } from '@/components/ui/ActionPillButton';
+import { NotificationsModal } from '@/components/ui/NotificationsModal';
 import { OptionsMenuItem } from '@/components/ui/OptionsMenuItem';
 import { OptionsPopover } from '@/components/ui/OptionsPopover';
 import {
+  AppNotification,
   clearToken,
   deleteProfileImage,
+  fetchNotifications,
   fetchProfile,
   fetchProfileImages,
+  markAllNotificationsAsRead,
+  updatePushToken,
   updateProfile,
   uploadProfileImages,
   UserProfile,
@@ -50,14 +55,25 @@ export default function ProfileScreen() {
   const [updatingDiscovery, setUpdatingDiscovery] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [notificationsError, setNotificationsError] = useState('');
 
   const loadProfile = async () => {
     setError('');
     setLoading(true);
     try {
-      const [data, profileImages] = await Promise.all([fetchProfile(), fetchProfileImages()]);
+      const [data, profileImages, notificationsData] = await Promise.all([
+        fetchProfile(),
+        fetchProfileImages(),
+        fetchNotifications(),
+      ]);
       setProfile(data);
       setImages(profileImages);
+      setNotifications(notificationsData.notifications ?? []);
+      setUnreadNotifications(notificationsData.unreadCount ?? 0);
       setFormState({
         firstName: data.firstName ?? '',
         lastName: data.lastName ?? '',
@@ -158,9 +174,35 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
+    try {
+      await updatePushToken(null);
+    } catch {
+      // Ignore push-token cleanup failures during logout.
+    }
     await clearToken();
     setTokenValue(null);
     router.replace('/(tabs)');
+  };
+
+  const openNotifications = async () => {
+    setShowSettingsMenu(false);
+    setShowNotificationsModal(true);
+    setLoadingNotifications(true);
+    setNotificationsError('');
+    try {
+      const data = await fetchNotifications();
+      setNotifications(data.notifications ?? []);
+      setUnreadNotifications(data.unreadCount ?? 0);
+      if ((data.unreadCount ?? 0) > 0) {
+        await markAllNotificationsAsRead();
+        setUnreadNotifications(0);
+        setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+      }
+    } catch (err) {
+      setNotificationsError(err instanceof Error ? err.message : 'Failed to load notifications.');
+    } finally {
+      setLoadingNotifications(false);
+    }
   };
 
   return (
@@ -314,6 +356,11 @@ export default function ProfileScreen() {
           }}
         />
         <OptionsMenuItem
+          iconName="notifications"
+          label={unreadNotifications > 0 ? `Notifications (${unreadNotifications})` : 'Notifications'}
+          onPress={openNotifications}
+        />
+        <OptionsMenuItem
           iconName="logout"
           iconColor="#c1121f"
           label="Log out"
@@ -364,6 +411,13 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+      <NotificationsModal
+        visible={showNotificationsModal}
+        onClose={() => setShowNotificationsModal(false)}
+        loading={loadingNotifications}
+        error={notificationsError}
+        notifications={notifications}
+      />
       <Modal visible={Boolean(previewImage)} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setPreviewImage(null)} />

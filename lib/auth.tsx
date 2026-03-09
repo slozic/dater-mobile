@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { getToken } from '@/lib/api';
+import { getToken, updatePushToken } from '@/lib/api';
+import Constants from 'expo-constants';
 
 type AuthContextValue = {
   token: string | null;
@@ -24,6 +25,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshToken();
   }, [refreshToken]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    let cancelled = false;
+    const registerPush = async () => {
+      const isExpoGo =
+        Constants.appOwnership === 'expo' ||
+        Constants.executionEnvironment === 'storeClient';
+      if (__DEV__ || isExpoGo) {
+        return;
+      }
+      try {
+        const { registerForPushNotificationsAsync } = await import('@/lib/push-notifications');
+        const pushToken = await registerForPushNotificationsAsync();
+        if (!cancelled) {
+          await updatePushToken(pushToken);
+        }
+      } catch {
+        // Keep auth flow resilient even if push registration fails.
+      }
+    };
+    registerPush();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const value = useMemo(
     () => ({

@@ -376,6 +376,12 @@ export default function DateDetailsScreen() {
     ]);
   };
 
+  const attendeeRequests =
+    currentUserId == null ? requests : requests.filter((request) => request.id !== currentUserId);
+  const acceptedAttendee = attendeeRequests.find((request) => request.status === 'ACCEPTED');
+  const waitlistAttendees = attendeeRequests.filter((request) => request.status === 'ON_WAITLIST');
+  const visibleRequestsCount = waitlistAttendees.length + (acceptedAttendee ? 1 : 0);
+
   return (
     <SafeAreaView style={styles.container}>
       {loading ? <ActivityIndicator /> : null}
@@ -392,9 +398,8 @@ export default function DateDetailsScreen() {
             const pastDate = isPastDate(date.scheduledTime);
             const canEditDate = isOwner && !pastDate && !editing;
             const canDeleteDate = isOwner && !editing;
-            const canOpenChat = !pastDate && (isOwner || joinStatus === 'ACCEPTED');
             const canUploadImages = isOwner && !pastDate;
-            const hasMenuActions = canEditDate || canDeleteDate || canOpenChat || canUploadImages;
+            const hasMenuActions = canEditDate || canDeleteDate || canUploadImages;
 
             if (!hasMenuActions) return null;
 
@@ -550,13 +555,20 @@ export default function DateDetailsScreen() {
           </View>
 
           {date.dateOwnerId !== currentUserId && !isPastDate(date.scheduledTime) ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Join status</Text>
-              <View style={styles.statusRow}>
-                <View style={[styles.statusBadge, badgeStyle(joinStatus)]}>
-                  <Text style={styles.statusBadgeText}>{formatStatus(joinStatus)}</Text>
+            <View style={[styles.section, styles.joinStatusSection]}>
+              {joinStatus !== 'ACCEPTED' ? <Text style={styles.sectionTitle}>Join status</Text> : null}
+              {joinStatus !== 'ACCEPTED' ? (
+                <View style={styles.statusRow}>
+                  <View style={[styles.statusBadge, badgeStyle(joinStatus)]}>
+                    <Text style={styles.statusBadgeText}>{formatStatus(joinStatus)}</Text>
+                  </View>
                 </View>
-              </View>
+              ) : (
+                <View style={styles.acceptedNoticeRow}>
+                  <Text style={styles.acceptedNoticeText}>Your date request has been accepted!</Text>
+                  <MaterialIcons name="favorite" size={16} color={ACCENT} />
+                </View>
+              )}
               {joinStatus === 'NOT_REQUESTED' ? (
                 <Pressable
                   style={({ pressed }) => [styles.primaryButton, styles.compactCtaButton, pressed && styles.buttonPressed]}
@@ -571,6 +583,14 @@ export default function DateDetailsScreen() {
                   onPress={handleCancelJoin}
                 >
                   <Text style={styles.outlineButtonText}>Cancel request</Text>
+                </Pressable>
+              ) : null}
+              {joinStatus === 'ACCEPTED' ? (
+                <Pressable
+                  style={({ pressed }) => [styles.primaryButton, styles.compactCtaButton, pressed && styles.buttonPressed]}
+                  onPress={handleOpenChat}
+                >
+                  <Text style={styles.primaryButtonText}>Send message</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -589,96 +609,96 @@ export default function DateDetailsScreen() {
                     {loadingRequests
                       ? 'Loading requests...'
                       : requestsLoaded
-                        ? `View requests (${requests.length})`
+                        ? `View requests (${visibleRequestsCount})`
                         : 'View requests'}
                   </Text>
                 </Pressable>
               ) : (
                 <View style={styles.requestSection}>
                   {loadingRequests ? <ActivityIndicator /> : null}
-                  {!loadingRequests && requests.length === 0 ? <Text style={styles.value}>No requests yet.</Text> : null}
+                  {!loadingRequests && visibleRequestsCount === 0 ? <Text style={styles.value}>No requests yet.</Text> : null}
                   {!loadingRequests ? (
                     <>
-                      {(() => {
-                        const accepted = requests.find((req) => req.status === 'ACCEPTED');
-                        const waitlist = requests.filter((req) => req.status === 'ON_WAITLIST');
-                        return (
-                          <>
-                            <Text style={styles.requestSubtitle}>Accepted attendee</Text>
-                            {accepted ? (
-                              <View style={styles.requestCard}>
-                                <Pressable
-                                  style={styles.requestInfo}
-                                  onPress={() =>
-                                    router.push({ pathname: '/user/[id]', params: { id: accepted.id } })
-                                  }
-                                  hitSlop={8}
-                                >
-                                  <View style={styles.avatarCircle}>
-                                    <MaterialIcons name="person" size={18} color="#6b6b73" />
-                                  </View>
-                                  <Text style={styles.requestName}>{accepted.username}</Text>
-                                </Pressable>
-                                <View style={styles.requestActions}>
-                                  <Pressable style={styles.requestPrimaryAction} disabled>
-                                    <Text style={[styles.requestPrimaryActionText, styles.disabledText]}>Accepted</Text>
-                                  </Pressable>
-                                  <Pressable
-                                    style={({ pressed }) => [styles.requestOutlineAction, pressed && styles.buttonPressed]}
-                                    onPress={() => confirmReject(accepted.id)}
-                                  >
-                                    <Text style={styles.requestOutlineActionText}>Reject</Text>
-                                  </Pressable>
-                                </View>
-                              </View>
-                            ) : (
-                              <Text style={styles.value}>No accepted attendee yet.</Text>
-                            )}
+                      <Text style={styles.requestSubtitle}>Accepted attendee</Text>
+                      {acceptedAttendee ? (
+                        <View style={styles.requestCard}>
+                          <Pressable
+                            style={styles.requestInfo}
+                            onPress={() =>
+                              router.push({ pathname: '/user/[id]', params: { id: acceptedAttendee.id } })
+                            }
+                            hitSlop={8}
+                          >
+                            <View style={styles.avatarCircle}>
+                              <MaterialIcons name="person" size={18} color="#6b6b73" />
+                            </View>
+                            <Text style={styles.requestName}>{acceptedAttendee.username}</Text>
+                          </Pressable>
+                          <View style={styles.requestActions}>
+                            <Pressable
+                              style={({ pressed }) => [styles.requestPrimaryAction, pressed && styles.buttonPressed]}
+                              onPress={handleOpenChat}
+                            >
+                              <Text style={styles.requestPrimaryActionText}>Send message</Text>
+                            </Pressable>
+                            <Pressable
+                              style={({ pressed }) => [styles.requestOutlineAction, pressed && styles.buttonPressed]}
+                              onPress={() => confirmReject(acceptedAttendee.id)}
+                            >
+                              <Text style={styles.requestOutlineActionText}>Reject</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.inlineHintWrap}>
+                          <Text style={styles.value}>No accepted attendee yet.</Text>
+                          <Pressable style={[styles.requestPrimaryAction, styles.requestActionDisabled]} disabled>
+                            <Text style={[styles.requestPrimaryActionText, styles.disabledText]}>Send message</Text>
+                          </Pressable>
+                        </View>
+                      )}
 
-                            <Text style={styles.requestSubtitle}>Waitlist ({waitlist.length})</Text>
-                            {waitlist.length === 0 ? <Text style={styles.value}>No one on waitlist.</Text> : null}
-                            {waitlist.map((req) => (
-                              <View key={req.id} style={styles.requestCard}>
-                                <Pressable
-                                  style={styles.requestInfo}
-                                  onPress={() => router.push({ pathname: '/user/[id]', params: { id: req.id } })}
-                                  hitSlop={8}
-                                >
-                                  <View style={styles.avatarCircle}>
-                                    <MaterialIcons name="person" size={18} color="#6b6b73" />
-                                  </View>
-                                  <Text style={styles.requestName}>{req.username}</Text>
-                                </Pressable>
-                                <View style={styles.requestActions}>
-                                  <Pressable
-                                    style={({ pressed }) => [
-                                      styles.requestPrimaryAction,
-                                      pressed && styles.buttonPressed,
-                                    ]}
-                                    onPress={() => confirmAccept(req.id)}
-                                    disabled={Boolean(accepted && accepted.id !== req.id)}
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.requestPrimaryActionText,
-                                        accepted && accepted.id !== req.id ? styles.disabledText : undefined,
-                                      ]}
-                                    >
-                                      Accept
-                                    </Text>
-                                  </Pressable>
-                                  <Pressable
-                                    style={({ pressed }) => [styles.requestOutlineAction, pressed && styles.buttonPressed]}
-                                    onPress={() => confirmReject(req.id)}
-                                  >
-                                    <Text style={styles.requestOutlineActionText}>Reject</Text>
-                                  </Pressable>
-                                </View>
-                              </View>
-                            ))}
-                          </>
-                        );
-                      })()}
+                      <Text style={styles.requestSubtitle}>Waitlist ({waitlistAttendees.length})</Text>
+                      {waitlistAttendees.length === 0 ? <Text style={styles.value}>No one on waitlist.</Text> : null}
+                      {waitlistAttendees.map((req) => (
+                        <View key={req.id} style={styles.requestCard}>
+                          <Pressable
+                            style={styles.requestInfo}
+                            onPress={() => router.push({ pathname: '/user/[id]', params: { id: req.id } })}
+                            hitSlop={8}
+                          >
+                            <View style={styles.avatarCircle}>
+                              <MaterialIcons name="person" size={18} color="#6b6b73" />
+                            </View>
+                            <Text style={styles.requestName}>{req.username}</Text>
+                          </Pressable>
+                          <View style={styles.requestActions}>
+                            <Pressable
+                              style={({ pressed }) => [
+                                styles.requestPrimaryAction,
+                                pressed && styles.buttonPressed,
+                              ]}
+                              onPress={() => confirmAccept(req.id)}
+                              disabled={Boolean(acceptedAttendee && acceptedAttendee.id !== req.id)}
+                            >
+                              <Text
+                                style={[
+                                  styles.requestPrimaryActionText,
+                                  acceptedAttendee && acceptedAttendee.id !== req.id ? styles.disabledText : undefined,
+                                ]}
+                              >
+                                Accept
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              style={({ pressed }) => [styles.requestOutlineAction, pressed && styles.buttonPressed]}
+                              onPress={() => confirmReject(req.id)}
+                            >
+                              <Text style={styles.requestOutlineActionText}>Reject</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      ))}
                     </>
                   ) : null}
                   <Pressable style={styles.toggleButton} onPress={toggleRequests}>
@@ -718,9 +738,6 @@ export default function DateDetailsScreen() {
               }}
               disabled={deletingDate}
             />
-          ) : null}
-          {!isPastDate(date.scheduledTime) && (date.dateOwnerId === currentUserId || joinStatus === 'ACCEPTED') ? (
-            <OptionsMenuItem iconName="chat-bubble-outline" label="Open chat" onPress={handleOpenChat} />
           ) : null}
           {date.dateOwnerId === currentUserId && !isPastDate(date.scheduledTime) ? (
             <OptionsMenuItem
@@ -827,6 +844,9 @@ const styles = StyleSheet.create({
   },
   section: {
     marginTop: 16,
+  },
+  joinStatusSection: {
+    marginTop: 22,
   },
   sectionTitle: {
     fontSize: 16,
@@ -970,6 +990,20 @@ const styles = StyleSheet.create({
   requestSection: {
     gap: 10,
   },
+  acceptedNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  acceptedNoticeText: {
+    color: '#1b1b1f',
+    fontWeight: '700',
+  },
+  inlineHintWrap: {
+    gap: 8,
+    alignItems: 'flex-start',
+  },
   requestSubtitle: {
     fontWeight: '600',
     color: '#6b6b73',
@@ -997,6 +1031,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
+  },
+  requestActionDisabled: {
+    opacity: 0.55,
   },
   requestPrimaryActionText: {
     color: '#fff',

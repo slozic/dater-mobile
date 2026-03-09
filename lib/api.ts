@@ -320,6 +320,19 @@ export async function updateProfile(payload: {
   return response.json();
 }
 
+export async function updatePushToken(pushToken: string | null): Promise<void> {
+  const response = await withAuthFetch('/users/push-token', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ pushToken }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to update push token.');
+  }
+}
+
 export type DateImage = {
   id: string;
   imageUrl: string | null;
@@ -447,6 +460,21 @@ export type DateChatMessage = {
   createdAt: string;
 };
 
+export type AppNotification = {
+  id: string;
+  type: 'ATTENDEE_ACCEPTED' | 'CHAT_MESSAGE';
+  title: string;
+  body: string;
+  relatedDateId: string | null;
+  createdAt: string;
+  read: boolean;
+};
+
+export type NotificationListResponse = {
+  unreadCount: number;
+  notifications: AppNotification[];
+};
+
 export async function fetchAttendeeStatus(dateId: string) {
   const response = await withAuthFetch(`/dates/${dateId}/attendees/status`);
 
@@ -529,4 +557,21 @@ export async function sendDateChatMessage(dateId: string, message: string): Prom
     throw new Error('Failed to send message.');
   }
   return response.json();
+}
+
+export async function fetchNotifications(): Promise<NotificationListResponse> {
+  const response = await withAuthFetch('/notifications');
+  if (!response.ok) {
+    throw new Error('Failed to load notifications.');
+  }
+  return response.json();
+}
+
+export async function markAllNotificationsAsRead(): Promise<void> {
+  const response = await withAuthFetch('/notifications/read-all', {
+    method: 'PUT',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to mark notifications as read.');
+  }
 }
