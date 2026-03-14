@@ -5,10 +5,6 @@ import { Platform } from 'react-native';
 
 let notificationHandlerConfigured = false;
 
-function isExpoGoRuntime() {
-  return Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
-}
-
 function configureNotificationHandlerOnce() {
   if (notificationHandlerConfigured) {
     return;
@@ -26,10 +22,6 @@ function configureNotificationHandlerOnce() {
 }
 
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
-  if (isExpoGoRuntime()) {
-    return null;
-  }
-
   if (!Device.isDevice) {
     return null;
   }

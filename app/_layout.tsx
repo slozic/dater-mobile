@@ -1,18 +1,59 @@
+import { useEffect } from 'react';
 import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { AuthProvider } from '@/lib/auth';
+import { useAuth } from '@/lib/auth';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+function NotificationNavigationBridge() {
+  const router = useRouter();
+  const { token } = useAuth();
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const openNotificationTarget = (response: Notifications.NotificationResponse) => {
+      const payload = response.notification.request.content.data as Record<string, unknown> | undefined;
+      const dateId = typeof payload?.dateId === 'string' ? payload.dateId.trim() : '';
+      if (!dateId) {
+        return;
+      }
+      router.push(`/date/chat/${dateId}`);
+    };
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(openNotificationTarget);
+    void Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (response) {
+          openNotificationTarget(response);
+        }
+      })
+      .catch(() => {
+        // Ignore stale/invalid cached response errors.
+      });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [token, router]);
+
+  return null;
+}
+
 export default function RootLayout() {
   return (
     <AuthProvider>
       <ThemeProvider value={DefaultTheme}>
+        <NotificationNavigationBridge />
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: '#ffffff' },

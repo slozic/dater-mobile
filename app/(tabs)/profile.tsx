@@ -417,6 +417,12 @@ export default function ProfileScreen() {
         loading={loadingNotifications}
         error={notificationsError}
         notifications={notifications}
+        onSelectNotification={(notification) => {
+          setShowNotificationsModal(false);
+          if (notification.relatedDateId) {
+            router.push(`/date/chat/${notification.relatedDateId}`);
+          }
+        }}
       />
       <Modal visible={Boolean(previewImage)} transparent animationType="fade">
         <View style={styles.modalBackdrop}>

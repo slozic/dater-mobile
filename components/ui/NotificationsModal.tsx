@@ -7,11 +7,19 @@ type NotificationsModalProps = {
   loading: boolean;
   error: string;
   notifications: AppNotification[];
+  onSelectNotification?: (notification: AppNotification) => void;
 };
 
 const ACCENT = '#ff5c8a';
 
-export function NotificationsModal({ visible, onClose, loading, error, notifications }: NotificationsModalProps) {
+export function NotificationsModal({
+  visible,
+  onClose,
+  loading,
+  error,
+  notifications,
+  onSelectNotification,
+}: NotificationsModalProps) {
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.modalBackdrop}>
@@ -24,10 +32,14 @@ export function NotificationsModal({ visible, onClose, loading, error, notificat
           {!loading && !error ? (
             <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
               {notifications.map((item) => (
-                <View key={item.id} style={[styles.item, !item.read && styles.itemUnread]}>
+                <Pressable
+                  key={item.id}
+                  style={({ pressed }) => [styles.item, !item.read && styles.itemUnread, pressed && styles.pressed]}
+                  onPress={() => onSelectNotification?.(item)}
+                >
                   <Text style={styles.itemTitle}>{item.title}</Text>
                   <Text style={styles.itemBody}>{item.body}</Text>
-                </View>
+                </Pressable>
               ))}
             </ScrollView>
           ) : null}

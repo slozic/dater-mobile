@@ -42,6 +42,11 @@ To learn more about developing your project with Expo, look at the following res
 - [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
 - [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
 
+## Project docs
+
+- Dev client + Android push setup for this project:
+  - `README_DEV_CLIENT_AND_PUSH_SETUP.md`
+
 ## Join the community
 
 Join our community of developers creating universal apps.
