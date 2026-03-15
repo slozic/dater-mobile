@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -29,6 +29,8 @@ export default function DateChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const messagesScrollRef = useRef<ScrollView>(null);
+  const initialScrollDoneRef = useRef(false);
 
   const loadMessages = useCallback(async () => {
     if (!id) return;
@@ -59,6 +61,7 @@ export default function DateChatScreen() {
   useFocusEffect(
     useCallback(() => {
       let timer: ReturnType<typeof setInterval> | null = null;
+      initialScrollDoneRef.current = false;
       loadMessages();
       timer = setInterval(() => {
         loadMessages();
@@ -80,6 +83,9 @@ export default function DateChatScreen() {
       await sendDateChatMessage(id, message);
       setDraft('');
       await loadMessages();
+      requestAnimationFrame(() => {
+        messagesScrollRef.current?.scrollToEnd({ animated: true });
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message.');
     } finally {
@@ -98,9 +104,19 @@ export default function DateChatScreen() {
         {loading ? <ActivityIndicator /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <ScrollView
+          ref={messagesScrollRef}
           style={styles.messages}
           contentContainerStyle={styles.messagesContent}
           keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => {
+            if (initialScrollDoneRef.current || messages.length === 0) {
+              return;
+            }
+            requestAnimationFrame(() => {
+              messagesScrollRef.current?.scrollToEnd({ animated: false });
+              initialScrollDoneRef.current = true;
+            });
+          }}
         >
           {messages.length === 0 ? <Text style={styles.emptyText}>No messages yet.</Text> : null}
           {messages.map((message) => {

@@ -5,6 +5,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Switch,
   StyleSheet,
   Text,
   TextInput,
@@ -14,17 +15,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { ActionPillButton } from '@/components/ui/ActionPillButton';
-import { NotificationsModal } from '@/components/ui/NotificationsModal';
 import { OptionsMenuItem } from '@/components/ui/OptionsMenuItem';
 import { OptionsPopover } from '@/components/ui/OptionsPopover';
 import {
-  AppNotification,
   clearToken,
   deleteProfileImage,
-  fetchNotifications,
   fetchProfile,
   fetchProfileImages,
-  markAllNotificationsAsRead,
   updatePushToken,
   updateProfile,
   uploadProfileImages,
@@ -50,30 +47,21 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [images, setImages] = useState<Array<{ id: string; imageUrl: string | null }>>([]);
+  const [images, setImages] = useState<{ id: string; imageUrl: string | null }[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [updatingDiscovery, setUpdatingDiscovery] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
-  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [loadingNotifications, setLoadingNotifications] = useState(false);
-  const [notificationsError, setNotificationsError] = useState('');
+  const [showNotificationPrefsModal, setShowNotificationPrefsModal] = useState(false);
+  const [updatingNotificationPrefs, setUpdatingNotificationPrefs] = useState(false);
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     setError('');
     setLoading(true);
     try {
-      const [data, profileImages, notificationsData] = await Promise.all([
-        fetchProfile(),
-        fetchProfileImages(),
-        fetchNotifications(),
-      ]);
+      const [data, profileImages] = await Promise.all([fetchProfile(), fetchProfileImages()]);
       setProfile(data);
       setImages(profileImages);
-      setNotifications(notificationsData.notifications ?? []);
-      setUnreadNotifications(notificationsData.unreadCount ?? 0);
       setFormState({
         firstName: data.firstName ?? '',
         lastName: data.lastName ?? '',
@@ -90,16 +78,16 @@ export default function ProfileScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
-    loadProfile();
-  }, []);
+    void loadProfile();
+  }, [loadProfile]);
 
   useFocusEffect(
     useCallback(() => {
-      loadProfile();
-    }, []),
+      void loadProfile();
+    }, [loadProfile]),
   );
 
   const handleSave = async () => {
@@ -184,24 +172,23 @@ export default function ProfileScreen() {
     router.replace('/(tabs)');
   };
 
-  const openNotifications = async () => {
-    setShowSettingsMenu(false);
-    setShowNotificationsModal(true);
-    setLoadingNotifications(true);
-    setNotificationsError('');
+  const updateNotificationPreference = async (
+    key:
+      | 'chatMessageNotificationsEnabled'
+      | 'dateRequestNotificationsEnabled'
+      | 'attendeeAcceptedNotificationsEnabled',
+    value: boolean,
+  ) => {
+    if (!profile) return;
+    setUpdatingNotificationPrefs(true);
+    setError('');
     try {
-      const data = await fetchNotifications();
-      setNotifications(data.notifications ?? []);
-      setUnreadNotifications(data.unreadCount ?? 0);
-      if ((data.unreadCount ?? 0) > 0) {
-        await markAllNotificationsAsRead();
-        setUnreadNotifications(0);
-        setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
-      }
+      const updated = await updateProfile({ [key]: value });
+      setProfile(updated);
     } catch (err) {
-      setNotificationsError(err instanceof Error ? err.message : 'Failed to load notifications.');
+      setError(err instanceof Error ? err.message : 'Failed to update notification preference.');
     } finally {
-      setLoadingNotifications(false);
+      setUpdatingNotificationPrefs(false);
     }
   };
 
@@ -357,8 +344,11 @@ export default function ProfileScreen() {
         />
         <OptionsMenuItem
           iconName="notifications"
-          label={unreadNotifications > 0 ? `Notifications (${unreadNotifications})` : 'Notifications'}
-          onPress={openNotifications}
+          label="Notification settings"
+          onPress={() => {
+            setShowNotificationPrefsModal(true);
+            setShowSettingsMenu(false);
+          }}
         />
         <OptionsMenuItem
           iconName="logout"
@@ -411,19 +401,51 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
-      <NotificationsModal
-        visible={showNotificationsModal}
-        onClose={() => setShowNotificationsModal(false)}
-        loading={loadingNotifications}
-        error={notificationsError}
-        notifications={notifications}
-        onSelectNotification={(notification) => {
-          setShowNotificationsModal(false);
-          if (notification.relatedDateId) {
-            router.push(`/date/chat/${notification.relatedDateId}`);
-          }
-        }}
-      />
+      <Modal visible={showNotificationPrefsModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowNotificationPrefsModal(false)} />
+          <View style={styles.discoveryModalCard}>
+            <Text style={styles.discoveryModalTitle}>Notification settings</Text>
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>New messages</Text>
+              <Switch
+                value={profile?.chatMessageNotificationsEnabled ?? true}
+                onValueChange={(value) => updateNotificationPreference('chatMessageNotificationsEnabled', value)}
+                trackColor={{ false: '#d8d8e0', true: '#ffb8cf' }}
+                thumbColor={(profile?.chatMessageNotificationsEnabled ?? true) ? ACCENT : '#f4f3f4'}
+                disabled={updatingNotificationPrefs}
+              />
+            </View>
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>New requests on my dates</Text>
+              <Switch
+                value={profile?.dateRequestNotificationsEnabled ?? true}
+                onValueChange={(value) => updateNotificationPreference('dateRequestNotificationsEnabled', value)}
+                trackColor={{ false: '#d8d8e0', true: '#ffb8cf' }}
+                thumbColor={(profile?.dateRequestNotificationsEnabled ?? true) ? ACCENT : '#f4f3f4'}
+                disabled={updatingNotificationPrefs}
+              />
+            </View>
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>Request accepted</Text>
+              <Switch
+                value={profile?.attendeeAcceptedNotificationsEnabled ?? true}
+                onValueChange={(value) => updateNotificationPreference('attendeeAcceptedNotificationsEnabled', value)}
+                trackColor={{ false: '#d8d8e0', true: '#ffb8cf' }}
+                thumbColor={(profile?.attendeeAcceptedNotificationsEnabled ?? true) ? ACCENT : '#f4f3f4'}
+                disabled={updatingNotificationPrefs}
+              />
+            </View>
+            {updatingNotificationPrefs ? <ActivityIndicator /> : null}
+            <Pressable
+              style={({ pressed }) => [styles.modalCloseAction, pressed && styles.buttonPressed]}
+              onPress={() => setShowNotificationPrefsModal(false)}
+            >
+              <Text style={styles.modalCloseActionText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={Boolean(previewImage)} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setPreviewImage(null)} />
@@ -627,6 +649,18 @@ const styles = StyleSheet.create({
   modalCloseActionText: {
     color: ACCENT,
     fontWeight: '600',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+    gap: 12,
+  },
+  toggleLabel: {
+    color: '#1b1b1f',
+    flex: 1,
+    fontWeight: '500',
   },
   modalBackdrop: {
     flex: 1,

@@ -1,42 +1,13 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { fetchNotifications } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
 export default function TabLayout() {
   const { token } = useAuth();
   const hasToken = Boolean(token);
-  const [unreadCount, setUnreadCount] = React.useState(0);
-
-  React.useEffect(() => {
-    if (!hasToken) {
-      setUnreadCount(0);
-      return;
-    }
-    let active = true;
-    const loadUnread = async () => {
-      try {
-        const data = await fetchNotifications();
-        if (active) {
-          setUnreadCount(data.unreadCount ?? 0);
-        }
-      } catch {
-        if (active) {
-          setUnreadCount(0);
-        }
-      }
-    };
-    loadUnread();
-    const intervalId = setInterval(loadUnread, 15000);
-    return () => {
-      active = false;
-      clearInterval(intervalId);
-    };
-  }, [hasToken]);
 
   return (
     <Tabs
@@ -78,45 +49,9 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           href: hasToken ? undefined : null,
-          tabBarIcon: ({ color }) => (
-            <View style={styles.iconWrap}>
-              <IconSymbol size={28} name="person.fill" color={color} />
-              {unreadCount > 0 ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : String(unreadCount)}</Text>
-                </View>
-              ) : null}
-            </View>
-          ),
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
         }}
       />
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  iconWrap: {
-    position: 'relative',
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: -2,
-    right: -6,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    paddingHorizontal: 3,
-    backgroundColor: '#ff5c8a',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-});

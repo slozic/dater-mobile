@@ -5,8 +5,7 @@ import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { AuthProvider } from '@/lib/auth';
-import { useAuth } from '@/lib/auth';
+import { AuthProvider, useAuth } from '@/lib/auth';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -24,10 +23,16 @@ function NotificationNavigationBridge() {
     const openNotificationTarget = (response: Notifications.NotificationResponse) => {
       const payload = response.notification.request.content.data as Record<string, unknown> | undefined;
       const dateId = typeof payload?.dateId === 'string' ? payload.dateId.trim() : '';
+      const notificationType =
+        typeof payload?.notificationType === 'string' ? payload.notificationType.trim() : '';
       if (!dateId) {
         return;
       }
-      router.push(`/date/chat/${dateId}`);
+      if (notificationType === 'CHAT_MESSAGE') {
+        router.push(`/date/chat/${dateId}`);
+        return;
+      }
+      router.push(`/date/${dateId}`);
     };
 
     const subscription = Notifications.addNotificationResponseReceivedListener(openNotificationTarget);

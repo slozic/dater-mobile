@@ -285,6 +285,9 @@ export type UserProfile = {
   birthday: string | null;
   gender?: string | null;
   dateListGenderFilter?: 'ALL' | 'MALE' | 'FEMALE' | 'OTHER' | string | null;
+  attendeeAcceptedNotificationsEnabled?: boolean;
+  dateRequestNotificationsEnabled?: boolean;
+  chatMessageNotificationsEnabled?: boolean;
 };
 
 export async function fetchProfile(): Promise<UserProfile> {
@@ -304,6 +307,9 @@ export async function updateProfile(payload: {
   birthday?: string;
   gender?: string;
   dateListGenderFilter?: string;
+  attendeeAcceptedNotificationsEnabled?: boolean;
+  dateRequestNotificationsEnabled?: boolean;
+  chatMessageNotificationsEnabled?: boolean;
 }): Promise<UserProfile> {
   const response = await withAuthFetch('/users/profile', {
     method: 'PUT',
@@ -460,21 +466,6 @@ export type DateChatMessage = {
   createdAt: string;
 };
 
-export type AppNotification = {
-  id: string;
-  type: 'ATTENDEE_ACCEPTED' | 'CHAT_MESSAGE';
-  title: string;
-  body: string;
-  relatedDateId: string | null;
-  createdAt: string;
-  read: boolean;
-};
-
-export type NotificationListResponse = {
-  unreadCount: number;
-  notifications: AppNotification[];
-};
-
 export async function fetchAttendeeStatus(dateId: string) {
   const response = await withAuthFetch(`/dates/${dateId}/attendees/status`);
 
@@ -559,19 +550,3 @@ export async function sendDateChatMessage(dateId: string, message: string): Prom
   return response.json();
 }
 
-export async function fetchNotifications(): Promise<NotificationListResponse> {
-  const response = await withAuthFetch('/notifications');
-  if (!response.ok) {
-    throw new Error('Failed to load notifications.');
-  }
-  return response.json();
-}
-
-export async function markAllNotificationsAsRead(): Promise<void> {
-  const response = await withAuthFetch('/notifications/read-all', {
-    method: 'PUT',
-  });
-  if (!response.ok) {
-    throw new Error('Failed to mark notifications as read.');
-  }
-}
