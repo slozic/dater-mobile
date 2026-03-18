@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter } from 'expo-router';
-import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
+import Constants from 'expo-constants';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -19,9 +19,15 @@ function NotificationNavigationBridge() {
     if (!token) {
       return;
     }
+    const executionEnvironment = (Constants as { executionEnvironment?: string }).executionEnvironment;
+    if (Constants.appOwnership === 'expo' || executionEnvironment === 'storeClient') {
+      return;
+    }
 
-    const openNotificationTarget = (response: Notifications.NotificationResponse) => {
-      const payload = response.notification.request.content.data as Record<string, unknown> | undefined;
+    const openNotificationTarget = (response: unknown) => {
+      const payload = (
+        response as { notification?: { request?: { content?: { data?: Record<string, unknown> } } } }
+      )?.notification?.request?.content?.data;
       const dateId = typeof payload?.dateId === 'string' ? payload.dateId.trim() : '';
       const notificationType =
         typeof payload?.notificationType === 'string' ? payload.notificationType.trim() : '';
@@ -35,19 +41,28 @@ function NotificationNavigationBridge() {
       router.push(`/date/${dateId}`);
     };
 
-    const subscription = Notifications.addNotificationResponseReceivedListener(openNotificationTarget);
-    void Notifications.getLastNotificationResponseAsync()
-      .then((response) => {
-        if (response) {
-          openNotificationTarget(response);
+    let cancelled = false;
+    let subscription: { remove: () => void } | null = null;
+
+    void import('expo-notifications')
+      .then((Notifications) => {
+        if (cancelled) {
+          return;
         }
+        subscription = Notifications.addNotificationResponseReceivedListener(openNotificationTarget);
+        return Notifications.getLastNotificationResponseAsync().then((response) => {
+          if (response) {
+            openNotificationTarget(response);
+          }
+        });
       })
       .catch(() => {
-        // Ignore stale/invalid cached response errors.
+        // Ignore notification bridge setup errors in unsupported environments.
       });
 
     return () => {
-      subscription.remove();
+      cancelled = true;
+      subscription?.remove();
     };
   }, [token, router]);
 

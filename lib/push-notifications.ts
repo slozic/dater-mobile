@@ -1,15 +1,21 @@
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 let notificationHandlerConfigured = false;
 
-function configureNotificationHandlerOnce() {
+function isExpoGoRuntime() {
+  const executionEnvironment = (Constants as { executionEnvironment?: string }).executionEnvironment;
+  return Constants.appOwnership === 'expo' || executionEnvironment === 'storeClient';
+}
+
+function configureNotificationHandlerOnce(
+  notificationsModule: typeof import('expo-notifications'),
+) {
   if (notificationHandlerConfigured) {
     return;
   }
-  Notifications.setNotificationHandler({
+  notificationsModule.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
       shouldShowBadge: true,
@@ -25,9 +31,13 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   if (!Device.isDevice) {
     return null;
   }
+  if (isExpoGoRuntime()) {
+    return null;
+  }
 
   try {
-    configureNotificationHandlerOnce();
+    const Notifications = await import('expo-notifications');
+    configureNotificationHandlerOnce(Notifications);
 
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {

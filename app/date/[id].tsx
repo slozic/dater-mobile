@@ -363,6 +363,14 @@ export default function DateDetailsScreen() {
   };
 
   const confirmAccept = (userId: string) => {
+    if (Platform.OS === 'web') {
+      const confirmed =
+        typeof globalThis.confirm === 'function' ? globalThis.confirm('Accept request? This will accept this attendee.') : true;
+      if (confirmed) {
+        void handleAccept(userId);
+      }
+      return;
+    }
     Alert.alert('Accept request?', 'This will accept this attendee.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Accept', onPress: () => handleAccept(userId) },
@@ -370,6 +378,14 @@ export default function DateDetailsScreen() {
   };
 
   const confirmReject = (userId: string) => {
+    if (Platform.OS === 'web') {
+      const confirmed =
+        typeof globalThis.confirm === 'function' ? globalThis.confirm('Reject request? This will reject this attendee.') : true;
+      if (confirmed) {
+        void handleReject(userId);
+      }
+      return;
+    }
     Alert.alert('Reject request?', 'This will reject this attendee.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Reject', style: 'destructive', onPress: () => handleReject(userId) },
@@ -383,32 +399,38 @@ export default function DateDetailsScreen() {
   const visibleRequestsCount = waitlistAttendees.length + (acceptedAttendee ? 1 : 0);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       {loading ? <ActivityIndicator /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {date ? (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.card}>
-          <Text style={styles.title}>{date.title}</Text>
+          <View style={styles.topMetaRow}>
+            <View style={styles.inlineDateChip}>
+              <Text style={styles.inlineDateChipText} numberOfLines={1}>
+                {date.title}
+              </Text>
+            </View>
+            {(() => {
+              const isOwner = date.dateOwnerId === currentUserId;
+              const pastDate = isPastDate(date.scheduledTime);
+              const canEditDate = isOwner && !pastDate && !editing;
+              const canDeleteDate = isOwner && !editing;
+              const canUploadImages = isOwner && !pastDate;
+              const hasMenuActions = canEditDate || canDeleteDate || canUploadImages;
+
+              if (!hasMenuActions) return null;
+
+              return (
+                <View style={styles.optionsMenuInline}>
+                  <ActionPillButton label="Options" onPress={() => setShowOptionsMenu((prev) => !prev)} />
+                </View>
+              );
+            })()}
+          </View>
           {isPastDate(date.scheduledTime) ? (
             <Text style={styles.pastInfo}>Past date: requests and new uploads are disabled.</Text>
           ) : null}
-          {(() => {
-            const isOwner = date.dateOwnerId === currentUserId;
-            const pastDate = isPastDate(date.scheduledTime);
-            const canEditDate = isOwner && !pastDate && !editing;
-            const canDeleteDate = isOwner && !editing;
-            const canUploadImages = isOwner && !pastDate;
-            const hasMenuActions = canEditDate || canDeleteDate || canUploadImages;
-
-            if (!hasMenuActions) return null;
-
-            return (
-              <View style={styles.optionsMenuWrap}>
-                <ActionPillButton label="Options" onPress={() => setShowOptionsMenu((prev) => !prev)} />
-              </View>
-            );
-          })()}
 
           {editing ? (
             <View style={styles.editForm}>
@@ -768,8 +790,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 8,
     backgroundColor: '#f7f7fb',
+  },
+  topMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 8,
+  },
+  inlineDateChip: {
+    maxWidth: '68%',
+    borderRadius: 12,
+    backgroundColor: '#ffe5ef',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#ffd0e0',
+  },
+  inlineDateChipText: {
+    color: '#7a2044',
+    fontSize: 12,
+    fontWeight: '600',
   },
   scroll: {
     paddingBottom: 24,
@@ -838,10 +881,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1b1b1f',
   },
-  optionsMenuWrap: {
-    alignItems: 'flex-end',
-    marginBottom: 8,
-  },
+  optionsMenuInline: {},
   section: {
     marginTop: 16,
   },

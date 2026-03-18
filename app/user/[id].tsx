@@ -24,17 +24,16 @@ export default function PublicProfileScreen() {
   }, [id]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Public Profile</Text>
         {loading ? <ActivityIndicator /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {profile ? (
           <View style={styles.card}>
-            <Text style={styles.label}>Username</Text>
-            <Text style={styles.value}>{profile.username}</Text>
             <Text style={styles.label}>Name</Text>
             <Text style={styles.value}>{profile.fullName ?? '-'}</Text>
+            <Text style={styles.label}>Username</Text>
+            <Text style={styles.value}>{profile.username}</Text>
             <Text style={styles.label}>Gender</Text>
             <Text style={styles.value}>{profile.gender ?? '-'}</Text>
             <Text style={styles.label}>Photos</Text>
@@ -69,17 +68,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 8,
     backgroundColor: '#f7f7fb',
   },
   scroll: {
     paddingBottom: 24,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1b1b1f',
-    marginBottom: 8,
   },
   error: {
     color: '#b00020',

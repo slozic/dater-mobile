@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useHeaderHeight } from '@react-navigation/elements';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { DateChatMessage, fetchDateById, fetchDateChatMessages, fetchProfile, sendDateChatMessage } from '@/lib/api';
@@ -21,6 +22,7 @@ const ACCENT = '#ff5c8a';
 
 export default function DateChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const navigation = useNavigation();
   const headerHeight = useHeaderHeight();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<DateChatMessage[]>([]);
@@ -29,6 +31,7 @@ export default function DateChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const messagesScrollRef = useRef<ScrollView>(null);
   const initialScrollDoneRef = useRef(false);
 
@@ -58,6 +61,20 @@ export default function DateChatScreen() {
       .catch(() => {});
   }, [id]);
 
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: 'Date chat',
+      headerRight: () =>
+        dateTitle ? (
+          <View style={styles.headerDateChip}>
+            <Text style={styles.headerDateChipText} numberOfLines={1}>
+              {dateTitle}
+            </Text>
+          </View>
+        ) : null,
+    });
+  }, [navigation, dateTitle]);
+
   useFocusEffect(
     useCallback(() => {
       let timer: ReturnType<typeof setInterval> | null = null;
@@ -71,6 +88,22 @@ export default function DateChatScreen() {
       };
     }, [loadMessages]),
   );
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+    const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const handleSend = async () => {
     if (!id) return;
@@ -94,13 +127,12 @@ export default function DateChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
         style={styles.container}
       >
-        <Text style={styles.subtitle}>{dateTitle || 'Date conversation'}</Text>
         {loading ? <ActivityIndicator /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <ScrollView
@@ -143,11 +175,16 @@ export default function DateChatScreen() {
             );
           })}
         </ScrollView>
-        <View style={styles.composerRow}>
+        <View style={[styles.composerRow, Platform.OS === 'android' && keyboardHeight > 0 ? { marginBottom: keyboardHeight } : null]}>
           <TextInput
             style={styles.input}
             value={draft}
             onChangeText={setDraft}
+            onFocus={() => {
+              requestAnimationFrame(() => {
+                messagesScrollRef.current?.scrollToEnd({ animated: true });
+              });
+            }}
             placeholder="Type a message..."
             placeholderTextColor="#888"
             multiline
@@ -167,13 +204,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f7f7fb',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 0,
   },
-  subtitle: {
-    color: '#1b1b1f',
-    fontSize: 18,
+  headerDateChip: {
+    maxWidth: 170,
+    borderRadius: 12,
+    backgroundColor: '#ffe5ef',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#ffd0e0',
+  },
+  headerDateChipText: {
+    color: '#7a2044',
+    fontSize: 12,
     fontWeight: '600',
-    marginBottom: 10,
   },
   error: {
     color: '#b00020',
