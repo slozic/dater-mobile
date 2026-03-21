@@ -1,0 +1,38 @@
+---
+description: Dater mobile context and active conventions
+alwaysApply: true
+---
+
+# Mobile Context (`dater-mobile`)
+
+## Stack
+- Expo Router + React Native + TypeScript.
+- API client in `lib/api.ts` with SecureStore-backed auth.
+- Push integration with `expo-notifications`.
+
+## Current UX conventions
+- Keep stack headers clean and avoid duplicate in-content titles where unnecessary.
+- Maintain consistent top spacing/safe-area behavior across Date Details, Date Chat, and Public Profile.
+- Use accent chip and options-row patterns consistently in date-related screens.
+- Preserve chat UX:
+  - open at latest messages
+  - reliable Android keyboard behavior for composer visibility
+
+## Notification behavior
+- Profile exposes per-type notification settings toggles.
+- Push deep links route by payload type:
+  - `CHAT_MESSAGE` -> chat screen
+  - other date-related types -> date details
+- Expo Go is guarded for unsupported remote-push paths; dev build is required for full push testing.
+
+## Expo web note
+- `localhost:8081` runs this mobile app in web mode.
+- Use web-compatible confirm behavior for attendee accept/reject testing paths.
+
+## Coordination with backend
+- Keep notification-type enums and payload expectations in sync with backend.
+- Keep profile/notification preference fields aligned with backend DTOs.
+
+## Current backlog (high level)
+- Report/block users.
+- Final UI polish pass.
