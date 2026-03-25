@@ -13,27 +13,16 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import LoginForm from '@/components/LoginForm';
-import { DateListItem, fetchDates, getToken } from '@/lib/api';
+import { AppColors } from '@/constants/app';
+import { DateListItem, fetchDates } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { formatDisplayDateTime } from '@/lib/date-utils';
 
-const ACCENT = '#ff5c8a';
-
-const formatDisplayDateTime = (value: string) => {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(parsed);
-};
+const ACCENT = AppColors.accent;
 
 export default function DatesScreen() {
   const router = useRouter();
-  const { setTokenValue } = useAuth();
-  const [token, setToken] = useState<string | null>(null);
+  const { token, refreshToken, setTokenValue } = useAuth();
   const [dates, setDates] = useState<DateListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -65,7 +54,6 @@ export default function DatesScreen() {
       setDates(allDates.filter((item) => !excludedIds.has(item.id)));
     } catch (err) {
       if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
-        setToken(null);
         setTokenValue(null);
         setDates([]);
         setError('');
@@ -95,30 +83,25 @@ export default function DatesScreen() {
     }
   };
 
-  const refreshAuth = useCallback(() => {
-    getToken().then((storedToken) => {
-      setToken(storedToken);
-      if (storedToken) {
-        void loadDates();
-      } else {
-        setLoading(false);
-      }
-    });
-  }, [loadDates]);
-
   useFocusEffect(
     useCallback(() => {
-      refreshAuth();
-    }, [refreshAuth]),
+      if (token) {
+        void loadDates();
+        return;
+      }
+      setDates([]);
+      setError('');
+      setLoading(false);
+    }, [loadDates, token]),
   );
 
   if (!token) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.loginWrapper}>
           <LoginForm
             onSuccess={() => {
-              refreshAuth();
+              void refreshToken();
             }}
           />
         </View>
@@ -127,7 +110,7 @@ export default function DatesScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Dates</Text>

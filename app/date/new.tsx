@@ -14,10 +14,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import { AppColors } from '@/constants/app';
 import { createDate, uploadDateImages } from '@/lib/api';
+import { formatDateTimeForInput, formatDisplayDateTime } from '@/lib/date-utils';
+import { pickImagesFromLibrary } from '@/lib/image-picker';
+
+const ACCENT = AppColors.accent;
 
 export default function CreateDateScreen() {
   const router = useRouter();
@@ -29,7 +33,7 @@ export default function CreateDateScreen() {
   const [scheduledTime, setScheduledTime] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showPicker, setShowPicker] = useState(false);
-  const [images, setImages] = useState<Array<{ uri: string; type: string; name: string }>>([]);
+  const [images, setImages] = useState<{ uri: string; type: string; name: string }[]>([]);
   const [useDeviceLocation, setUseDeviceLocation] = useState(false);
   const [locationStatus, setLocationStatus] = useState('');
   const [error, setError] = useState('');
@@ -49,44 +53,14 @@ export default function CreateDateScreen() {
   const dateError = !scheduledTime.trim();
   const hasValidationErrors = titleError || locationError || descriptionError || dateError;
 
-  const formatDateTime = (date: Date) => {
-    const pad = (value: number) => value.toString().padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-      date.getHours(),
-    )}:${pad(date.getMinutes())}`;
-  };
-
-  const formatDisplayDateTime = (date: Date) =>
-    new Intl.DateTimeFormat(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(date);
-
   const handlePickImages = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permission.status !== 'granted') {
-      setError('Media library permission is required to upload images.');
-      return;
+    try {
+      const files = await pickImagesFromLibrary('date');
+      if (files.length === 0) return;
+      setImages((prev) => [...prev, ...files]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to pick images.');
     }
-    const picker = ImagePicker as unknown as { MediaType?: { Images?: unknown } };
-    const options: Record<string, unknown> = {
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    };
-    if (picker.MediaType?.Images) {
-      options.mediaTypes = [picker.MediaType.Images];
-    }
-    const result = await ImagePicker.launchImageLibraryAsync(options as any);
-    if (result.canceled) return;
-    const files = result.assets.map((asset) => ({
-      uri: asset.uri,
-      type: asset.mimeType ?? 'image/jpeg',
-      name: asset.fileName ?? `date-${Date.now()}.jpg`,
-    }));
-    setImages((prev) => [...prev, ...files]);
   };
 
   const handleToggleDeviceLocation = async (value: boolean) => {
@@ -131,7 +105,7 @@ export default function CreateDateScreen() {
             const combined = new Date(date);
             combined.setHours(time.getHours(), time.getMinutes(), 0, 0);
             setSelectedDate(combined);
-            setScheduledTime(formatDateTime(combined));
+            setScheduledTime(formatDateTimeForInput(combined));
           },
         });
       },
@@ -180,7 +154,7 @@ export default function CreateDateScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>New Date</Text>
         <View style={styles.form}>
@@ -256,7 +230,7 @@ export default function CreateDateScreen() {
               <Text style={styles.secondaryButtonText}>Pick date & time</Text>
             </Pressable>
             <Text style={styles.pickerValue}>
-              {selectedDate ? formatDisplayDateTime(selectedDate) : 'Not set'}
+              {selectedDate ? formatDisplayDateTime(selectedDate.toISOString()) : 'Not set'}
             </Text>
           </View>
           {(submitted || touched.scheduledTime) && dateError ? (
@@ -271,7 +245,7 @@ export default function CreateDateScreen() {
                 onChange={(_: unknown, date?: Date) => {
                   if (date) {
                     setSelectedDate(date);
-                    setScheduledTime(formatDateTime(date));
+                    setScheduledTime(formatDateTimeForInput(date));
                   }
                 }}
               />
@@ -382,7 +356,7 @@ const styles = StyleSheet.create({
     color: '#1b1b1f',
   },
   primaryButton: {
-    backgroundColor: '#ff5c8a',
+    backgroundColor: ACCENT,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',

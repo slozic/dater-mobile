@@ -14,12 +14,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ActionPillButton } from '@/components/ui/ActionPillButton';
 import { OptionsMenuItem } from '@/components/ui/OptionsMenuItem';
 import { OptionsPopover } from '@/components/ui/OptionsPopover';
+import { AppColors } from '@/constants/app';
+import { formatDateTimeForInput, formatDisplayDateTime, isPastDate } from '@/lib/date-utils';
+import { pickImagesFromLibrary } from '@/lib/image-picker';
 import {
   acceptAttendee,
   AttendeeRequest,
@@ -39,7 +41,7 @@ import {
   uploadDateImages,
 } from '@/lib/api';
 
-const ACCENT = '#ff5c8a';
+const ACCENT = AppColors.accent;
 
 export default function DateDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -59,6 +61,8 @@ export default function DateDetailsScreen() {
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingDate, setDeletingDate] = useState(false);
+  const [joinActionLoading, setJoinActionLoading] = useState(false);
+  const [requestActionUserId, setRequestActionUserId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     title: '',
     location: '',
@@ -107,27 +111,9 @@ export default function DateDetailsScreen() {
 
   const handlePickImages = async () => {
     if (!id) return;
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permission.status !== 'granted') {
-      setError('Media library permission is required to upload images.');
-      return;
-    }
-    const picker = ImagePicker as unknown as { MediaType?: { Images?: unknown } };
-    const options: Record<string, unknown> = {
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    };
-    if (picker.MediaType?.Images) {
-      options.mediaTypes = [picker.MediaType.Images];
-    }
-    const result = await ImagePicker.launchImageLibraryAsync(options as any);
-    if (result.canceled) return;
-    const files = result.assets.map((asset) => ({
-      uri: asset.uri,
-      type: asset.mimeType ?? 'image/jpeg',
-      name: asset.fileName ?? `image-${Date.now()}.jpg`,
-    }));
     try {
+      const files = await pickImagesFromLibrary('date');
+      if (files.length === 0) return;
       await uploadDateImages(id, files);
       const updated = await fetchDateImages(id);
       setImages(updated);
@@ -189,7 +175,8 @@ export default function DateDetailsScreen() {
   };
 
   const handleRequestJoin = async () => {
-    if (!id) return;
+    if (!id || joinActionLoading) return;
+    setJoinActionLoading(true);
     try {
       await requestToJoinDate(id);
       const status = await fetchAttendeeStatus(id);
@@ -198,35 +185,12 @@ export default function DateDetailsScreen() {
       Alert.alert('Request sent', 'You are now on the waitlist.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to request.');
+    } finally {
+      setJoinActionLoading(false);
     }
   };
 
   const formatStatus = (status: string) => status.replace(/_/g, ' ').toLowerCase();
-
-  const formatDisplayDateTime = (value: string) => {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return value;
-    return new Intl.DateTimeFormat(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(parsed);
-  };
-
-  const isPastDate = (value: string) => {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return false;
-    return parsed.getTime() <= Date.now() + 60_000;
-  };
-
-  const formatDateTimeForInput = (date: Date) => {
-    const pad = (value: number) => value.toString().padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-      date.getHours(),
-    )}:${pad(date.getMinutes())}`;
-  };
 
   const openEditAndroidPicker = () => {
     const current = editForm.scheduledTime ? new Date(editForm.scheduledTime) : new Date();
@@ -267,7 +231,8 @@ export default function DateDetailsScreen() {
   };
 
   const handleCancelJoin = async () => {
-    if (!id) return;
+    if (!id || joinActionLoading) return;
+    setJoinActionLoading(true);
     try {
       await cancelJoinRequest(id);
       const status = await fetchAttendeeStatus(id);
@@ -276,6 +241,8 @@ export default function DateDetailsScreen() {
       Alert.alert('Request canceled', 'Your request has been removed.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel request.');
+    } finally {
+      setJoinActionLoading(false);
     }
   };
 
@@ -335,7 +302,8 @@ export default function DateDetailsScreen() {
   };
 
   const handleAccept = async (userId: string) => {
-    if (!id) return;
+    if (!id || requestActionUserId) return;
+    setRequestActionUserId(userId);
     try {
       await acceptAttendee(id, userId);
       const updated = await fetchAttendeeRequests(id);
@@ -345,11 +313,14 @@ export default function DateDetailsScreen() {
       Alert.alert('Request accepted', 'You accepted this attendee.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to accept request.');
+    } finally {
+      setRequestActionUserId(null);
     }
   };
 
   const handleReject = async (userId: string) => {
-    if (!id) return;
+    if (!id || requestActionUserId) return;
+    setRequestActionUserId(userId);
     try {
       await rejectAttendee(id, userId);
       const updated = await fetchAttendeeRequests(id);
@@ -359,10 +330,13 @@ export default function DateDetailsScreen() {
       Alert.alert('Request rejected', 'You rejected this attendee.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reject request.');
+    } finally {
+      setRequestActionUserId(null);
     }
   };
 
   const confirmAccept = (userId: string) => {
+    if (requestActionUserId) return;
     if (Platform.OS === 'web') {
       const confirmed =
         typeof globalThis.confirm === 'function' ? globalThis.confirm('Accept request? This will accept this attendee.') : true;
@@ -378,6 +352,7 @@ export default function DateDetailsScreen() {
   };
 
   const confirmReject = (userId: string) => {
+    if (requestActionUserId) return;
     if (Platform.OS === 'web') {
       const confirmed =
         typeof globalThis.confirm === 'function' ? globalThis.confirm('Reject request? This will reject this attendee.') : true;
@@ -423,7 +398,12 @@ export default function DateDetailsScreen() {
 
               return (
                 <View style={styles.optionsMenuInline}>
-                  <ActionPillButton label="Options" onPress={() => setShowOptionsMenu((prev) => !prev)} />
+                  <ActionPillButton
+                    label="Options"
+                    accessibilityLabel="Open date options"
+                    accessibilityHint="Opens actions for editing, deleting, or uploading images"
+                    onPress={() => setShowOptionsMenu((prev) => !prev)}
+                  />
                 </View>
               );
             })()}
@@ -595,22 +575,37 @@ export default function DateDetailsScreen() {
                 <Pressable
                   style={({ pressed }) => [styles.primaryButton, styles.compactCtaButton, pressed && styles.buttonPressed]}
                   onPress={handleRequestJoin}
+                  disabled={joinActionLoading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Request to join date"
+                  accessibilityHint="Sends a join request to the date owner"
                 >
-                  <Text style={styles.primaryButtonText}>Request to join</Text>
+                  <Text style={styles.primaryButtonText}>
+                    {joinActionLoading ? 'Sending request...' : 'Request to join'}
+                  </Text>
                 </Pressable>
               ) : null}
               {joinStatus === 'ON_WAITLIST' ? (
                 <Pressable
                   style={({ pressed }) => [styles.outlineButton, styles.compactCtaButton, pressed && styles.buttonPressed]}
                   onPress={handleCancelJoin}
+                  disabled={joinActionLoading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel join request"
+                  accessibilityHint="Cancels your pending request to join this date"
                 >
-                  <Text style={styles.outlineButtonText}>Cancel request</Text>
+                  <Text style={styles.outlineButtonText}>
+                    {joinActionLoading ? 'Canceling...' : 'Cancel request'}
+                  </Text>
                 </Pressable>
               ) : null}
               {joinStatus === 'ACCEPTED' ? (
                 <Pressable
                   style={({ pressed }) => [styles.primaryButton, styles.compactCtaButton, pressed && styles.buttonPressed]}
                   onPress={handleOpenChat}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open date chat"
+                  accessibilityHint="Opens the chat for this date"
                 >
                   <Text style={styles.primaryButtonText}>Send message</Text>
                 </Pressable>
@@ -660,12 +655,20 @@ export default function DateDetailsScreen() {
                             <Pressable
                               style={({ pressed }) => [styles.requestPrimaryAction, pressed && styles.buttonPressed]}
                               onPress={handleOpenChat}
+                              disabled={Boolean(requestActionUserId)}
+                              accessibilityRole="button"
+                              accessibilityLabel="Send message to accepted attendee"
+                              accessibilityHint="Open chat with the currently accepted attendee"
                             >
                               <Text style={styles.requestPrimaryActionText}>Send message</Text>
                             </Pressable>
                             <Pressable
                               style={({ pressed }) => [styles.requestOutlineAction, pressed && styles.buttonPressed]}
                               onPress={() => confirmReject(acceptedAttendee.id)}
+                              disabled={Boolean(requestActionUserId)}
+                              accessibilityRole="button"
+                              accessibilityLabel="Reject accepted attendee"
+                              accessibilityHint="Removes the accepted attendee from this date"
                             >
                               <Text style={styles.requestOutlineActionText}>Reject</Text>
                             </Pressable>
@@ -701,7 +704,10 @@ export default function DateDetailsScreen() {
                                 pressed && styles.buttonPressed,
                               ]}
                               onPress={() => confirmAccept(req.id)}
-                              disabled={Boolean(acceptedAttendee && acceptedAttendee.id !== req.id)}
+                              disabled={Boolean(acceptedAttendee && acceptedAttendee.id !== req.id) || Boolean(requestActionUserId)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Accept attendee ${req.username}`}
+                              accessibilityHint="Accept this user from the waitlist"
                             >
                               <Text
                                 style={[
@@ -715,6 +721,10 @@ export default function DateDetailsScreen() {
                             <Pressable
                               style={({ pressed }) => [styles.requestOutlineAction, pressed && styles.buttonPressed]}
                               onPress={() => confirmReject(req.id)}
+                              disabled={Boolean(requestActionUserId)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Reject attendee ${req.username}`}
+                              accessibilityHint="Reject this user from the waitlist"
                             >
                               <Text style={styles.requestOutlineActionText}>Reject</Text>
                             </Pressable>

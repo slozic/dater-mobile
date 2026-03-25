@@ -7,33 +7,18 @@ import LoginForm from '@/components/LoginForm';
 import { ActionPillButton } from '@/components/ui/ActionPillButton';
 import { OptionsMenuItem } from '@/components/ui/OptionsMenuItem';
 import { OptionsPopover } from '@/components/ui/OptionsPopover';
-import { DateListItem, fetchAttendeeStatus, fetchDates, getToken } from '@/lib/api';
+import { AppColors } from '@/constants/app';
+import { DateListItem, fetchAttendeeStatus, fetchDates } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { formatDisplayDateTime, isPastDate } from '@/lib/date-utils';
+
+const ACCENT = AppColors.accent;
 
 type ViewMode = 'created' | 'requested' | 'accepted' | 'past';
 
-const formatDisplayDateTime = (value: string) => {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(parsed);
-};
-
-const isPastDate = (value: string) => {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return false;
-  return parsed.getTime() <= Date.now() + 60_000;
-};
-
 export default function MyDatesScreen() {
   const router = useRouter();
-  const { setTokenValue } = useAuth();
-  const [token, setToken] = useState<string | null>(null);
+  const { token, refreshToken, setTokenValue } = useAuth();
   const [createdDates, setCreatedDates] = useState<DateListItem[]>([]);
   const [requestedDates, setRequestedDates] = useState<DateListItem[]>([]);
   const [acceptedDates, setAcceptedDates] = useState<DateListItem[]>([]);
@@ -93,7 +78,6 @@ export default function MyDatesScreen() {
       setPastDates(sortedPast);
     } catch (err) {
       if (err instanceof Error && err.message === 'AUTH_EXPIRED') {
-        setToken(null);
         setTokenValue(null);
         setCreatedDates([]);
         setRequestedDates([]);
@@ -109,30 +93,28 @@ export default function MyDatesScreen() {
     }
   }, [setTokenValue]);
 
-  const refreshAuth = useCallback(() => {
-    getToken().then((storedToken) => {
-      setToken(storedToken);
-      if (storedToken) {
-        void loadDates();
-      } else {
-        setLoading(false);
-      }
-    });
-  }, [loadDates]);
-
   useFocusEffect(
     useCallback(() => {
-      refreshAuth();
-    }, [refreshAuth]),
+      if (token) {
+        void loadDates();
+        return;
+      }
+      setCreatedDates([]);
+      setRequestedDates([]);
+      setAcceptedDates([]);
+      setPastDates([]);
+      setError('');
+      setLoading(false);
+    }, [loadDates, token]),
   );
 
   if (!token) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.loginWrapper}>
           <LoginForm
             onSuccess={() => {
-              refreshAuth();
+              void refreshToken();
             }}
           />
         </View>
@@ -169,7 +151,7 @@ export default function MyDatesScreen() {
   })();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <View style={styles.headerTextWrap}>
           <Text style={styles.title}>My Dates</Text>
@@ -214,7 +196,7 @@ export default function MyDatesScreen() {
         <OptionsMenuItem
           active={viewMode === 'created'}
           iconName={viewMode === 'created' ? 'check-circle' : 'radio-button-unchecked'}
-          iconColor={viewMode === 'created' ? '#ff5c8a' : '#8a8a95'}
+          iconColor={viewMode === 'created' ? ACCENT : '#8a8a95'}
           label="Show created dates"
           onPress={() => {
             setViewMode('created');
@@ -224,7 +206,7 @@ export default function MyDatesScreen() {
         <OptionsMenuItem
           active={viewMode === 'requested'}
           iconName={viewMode === 'requested' ? 'check-circle' : 'radio-button-unchecked'}
-          iconColor={viewMode === 'requested' ? '#ff5c8a' : '#8a8a95'}
+          iconColor={viewMode === 'requested' ? ACCENT : '#8a8a95'}
           label="Show requested dates"
           onPress={() => {
             setViewMode('requested');
@@ -234,7 +216,7 @@ export default function MyDatesScreen() {
         <OptionsMenuItem
           active={viewMode === 'accepted'}
           iconName={viewMode === 'accepted' ? 'check-circle' : 'radio-button-unchecked'}
-          iconColor={viewMode === 'accepted' ? '#ff5c8a' : '#8a8a95'}
+          iconColor={viewMode === 'accepted' ? ACCENT : '#8a8a95'}
           label="Show accepted dates"
           onPress={() => {
             setViewMode('accepted');
@@ -244,7 +226,7 @@ export default function MyDatesScreen() {
         <OptionsMenuItem
           active={viewMode === 'past'}
           iconName={viewMode === 'past' ? 'check-circle' : 'radio-button-unchecked'}
-          iconColor={viewMode === 'past' ? '#ff5c8a' : '#8a8a95'}
+          iconColor={viewMode === 'past' ? ACCENT : '#8a8a95'}
           label="View past dates"
           onPress={() => {
             setViewMode('past');

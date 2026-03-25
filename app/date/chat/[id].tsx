@@ -16,9 +16,10 @@ import { useLocalSearchParams } from 'expo-router';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useHeaderHeight } from '@react-navigation/elements';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { AppColors, ChatLimits } from '@/constants/app';
 import { DateChatMessage, fetchDateById, fetchDateChatMessages, fetchProfile, sendDateChatMessage } from '@/lib/api';
 
-const ACCENT = '#ff5c8a';
+const ACCENT = AppColors.accent;
 
 export default function DateChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -187,10 +188,19 @@ export default function DateChatScreen() {
             }}
             placeholder="Type a message..."
             placeholderTextColor="#888"
+            accessibilityLabel="Chat message input"
+            accessibilityHint="Type your message to the date participant"
             multiline
-            maxLength={1000}
+            maxLength={ChatLimits.messageMaxLength}
           />
-          <Pressable style={({ pressed }) => [styles.sendButton, pressed && styles.pressed]} onPress={handleSend} disabled={sending}>
+          <Pressable
+            style={({ pressed }) => [styles.sendButton, pressed && styles.pressed]}
+            onPress={handleSend}
+            disabled={sending}
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
+            accessibilityHint="Send the typed chat message"
+          >
             <Text style={styles.sendButtonText}>{sending ? '...' : 'Send'}</Text>
           </Pressable>
         </View>

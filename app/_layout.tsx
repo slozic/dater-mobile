@@ -90,7 +90,6 @@ export default function RootLayout() {
           <Stack.Screen name="date/chat/[id]" options={{ title: 'Date chat' }} />
           <Stack.Screen name="user/[id]" options={{ title: 'Profile' }} />
           <Stack.Screen name="auth/register" options={{ title: 'Register' }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
         <StatusBar style="dark" />
       </ThemeProvider>

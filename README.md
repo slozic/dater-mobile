@@ -28,7 +28,10 @@ Expo/React Native client for the Dater project.
 
 1. Install dependencies:
    - `npm install`
-2. Start Expo:
+2. Set API URL for production-like runs:
+   - `EXPO_PUBLIC_API_URL=https://your-backend-host`
+   - This is mandatory for non-development builds.
+3. Start Expo:
    - `npx expo start`
 
 ## Run modes
@@ -46,10 +49,24 @@ Expo/React Native client for the Dater project.
 - Run:
   - `npm run lint`
 
+## Tests
+
+- Run unit tests:
+  - `npm test`
+- Watch mode during development:
+  - `npm run test:watch`
+- CI-style run (single process + coverage):
+  - `npm run test:ci`
+- Current coverage focus:
+  - API auth/error handling regressions (`lib/__tests__/api.test.ts`)
+  - Auth provider token/push flow (`lib/__tests__/auth.test.tsx`)
+
 ## Project docs
 
 - Dev client + Firebase push setup:
   - `docs/README_DEV_CLIENT_AND_PUSH_SETUP.md`
+- Mobile change history archive:
+  - `docs/history.md`
 
 ## Notes
 

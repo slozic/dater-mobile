@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { AppColors } from '@/constants/app';
 import { login } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
-const ACCENT = '#ff5c8a';
+const ACCENT = AppColors.accent;
 
 type Props = {
   onSuccess: () => void;
@@ -51,6 +52,8 @@ export default function LoginForm({ onSuccess }: Props) {
         style={[styles.input, (submitted || touched.username) && usernameError ? styles.inputError : undefined]}
         placeholder="Email or username"
         placeholderTextColor="#666"
+        accessibilityLabel="Email or username"
+        accessibilityHint="Enter your email address or username"
         autoCapitalize="none"
         value={username}
         onChangeText={setUsername}
@@ -63,6 +66,8 @@ export default function LoginForm({ onSuccess }: Props) {
         style={[styles.input, (submitted || touched.password) && passwordError ? styles.inputError : undefined]}
         placeholder="Password"
         placeholderTextColor="#666"
+        accessibilityLabel="Password"
+        accessibilityHint="Enter your account password"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -78,6 +83,9 @@ export default function LoginForm({ onSuccess }: Props) {
         <Pressable
           style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
           onPress={handleLogin}
+          accessibilityRole="button"
+          accessibilityLabel="Login"
+          accessibilityHint="Submit credentials and sign in"
         >
           <Text style={styles.primaryButtonText}>Login</Text>
         </Pressable>
@@ -85,6 +93,9 @@ export default function LoginForm({ onSuccess }: Props) {
       <Pressable
         style={({ pressed }) => [styles.outlineButton, pressed && styles.buttonPressed]}
         onPress={() => router.push('/auth/register')}
+        accessibilityRole="button"
+        accessibilityLabel="Create account"
+        accessibilityHint="Open registration form"
       >
         <Text style={styles.outlineButtonText}>Create account</Text>
       </Pressable>

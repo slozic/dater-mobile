@@ -1,16 +1,31 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
+import { AppColors } from '@/constants/app';
 
 type ActionPillButtonProps = {
   label: string;
   onPress: () => void;
   iconName?: ComponentProps<typeof MaterialIcons>['name'];
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
-export function ActionPillButton({ label, onPress, iconName = 'more-vert' }: ActionPillButtonProps) {
+export function ActionPillButton({
+  label,
+  onPress,
+  iconName = 'more-vert',
+  accessibilityLabel,
+  accessibilityHint,
+}: ActionPillButtonProps) {
   return (
-    <Pressable style={({ pressed }) => [styles.trigger, pressed && styles.pressed]} onPress={onPress}>
+    <Pressable
+      style={({ pressed }) => [styles.trigger, pressed && styles.pressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={accessibilityHint}
+    >
       <MaterialIcons name={iconName} size={18} color="#fff" />
       <Text style={styles.triggerText}>{label}</Text>
     </Pressable>
@@ -22,7 +37,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#ff5c8a',
+    backgroundColor: AppColors.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,

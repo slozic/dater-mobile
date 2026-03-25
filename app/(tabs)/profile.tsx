@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import { ActionPillButton } from '@/components/ui/ActionPillButton';
 import { OptionsMenuItem } from '@/components/ui/OptionsMenuItem';
 import { OptionsPopover } from '@/components/ui/OptionsPopover';
@@ -27,10 +26,12 @@ import {
   uploadProfileImages,
   UserProfile,
 } from '@/lib/api';
+import { AppColors } from '@/constants/app';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '@/lib/auth';
+import { pickImagesFromLibrary } from '@/lib/image-picker';
 
-const ACCENT = '#ff5c8a';
+const ACCENT = AppColors.accent;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -80,10 +81,6 @@ export default function ProfileScreen() {
     }
   }, [router]);
 
-  useEffect(() => {
-    void loadProfile();
-  }, [loadProfile]);
-
   useFocusEffect(
     useCallback(() => {
       void loadProfile();
@@ -109,27 +106,9 @@ export default function ProfileScreen() {
   };
 
   const handlePickProfileImages = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permission.status !== 'granted') {
-      setError('Media library permission is required to upload images.');
-      return;
-    }
-    const picker = ImagePicker as unknown as { MediaType?: { Images?: unknown } };
-    const options: Record<string, unknown> = {
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    };
-    if (picker.MediaType?.Images) {
-      options.mediaTypes = [picker.MediaType.Images];
-    }
-    const result = await ImagePicker.launchImageLibraryAsync(options as any);
-    if (result.canceled) return;
-    const files = result.assets.map((asset) => ({
-      uri: asset.uri,
-      type: asset.mimeType ?? 'image/jpeg',
-      name: asset.fileName ?? `profile-${Date.now()}.jpg`,
-    }));
     try {
+      const files = await pickImagesFromLibrary('profile');
+      if (files.length === 0) return;
       await uploadProfileImages(files);
       const updated = await fetchProfileImages();
       setImages(updated);
@@ -193,12 +172,17 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Profile</Text>
           <View style={styles.optionsMenuWrap}>
-            <ActionPillButton label="Settings" onPress={() => setShowSettingsMenu((prev) => !prev)} />
+            <ActionPillButton
+              label="Settings"
+              accessibilityLabel="Open profile settings"
+              accessibilityHint="Opens actions for editing profile, notifications, and logout"
+              onPress={() => setShowSettingsMenu((prev) => !prev)}
+            />
           </View>
         </View>
         {loading ? <ActivityIndicator /> : null}
@@ -211,7 +195,12 @@ export default function ProfileScreen() {
             {images.map((img) => (
               <View key={img.id} style={styles.imageWrap}>
                 {img.imageUrl ? (
-                  <Pressable onPress={() => setPreviewImage(img.imageUrl)}>
+                  <Pressable
+                    onPress={() => setPreviewImage(img.imageUrl)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open profile photo"
+                    accessibilityHint="Opens a full-screen preview of this photo"
+                  >
                     <Image source={{ uri: img.imageUrl }} style={styles.image} />
                   </Pressable>
                 ) : (
@@ -219,7 +208,12 @@ export default function ProfileScreen() {
                     <Text style={styles.imageFallbackText}>No image</Text>
                   </View>
                 )}
-                <Pressable onPress={() => handleDeleteProfileImage(img.id)}>
+                <Pressable
+                  onPress={() => handleDeleteProfileImage(img.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete profile photo"
+                  accessibilityHint="Removes this profile image"
+                >
                   <Text style={styles.deleteText}>Delete</Text>
                 </Pressable>
               </View>

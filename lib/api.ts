@@ -6,6 +6,13 @@ const ACCESS_TOKEN_KEY = 'dater_token';
 const REFRESH_TOKEN_KEY = 'dater_refresh_token';
 let refreshInFlight: Promise<string> | null = null;
 
+type ApiErrorResponse = {
+  detail?: unknown;
+  message?: unknown;
+  title?: unknown;
+  error?: unknown;
+};
+
 export async function getToken(): Promise<string | null> {
   if (Platform.OS === 'web') {
     return typeof localStorage !== 'undefined' ? localStorage.getItem(ACCESS_TOKEN_KEY) : null;
@@ -106,6 +113,39 @@ export async function login(username: string, password: string): Promise<string>
   return token;
 }
 
+async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+  if (contentType.includes('application/json')) {
+    try {
+      const payload = (await response.json()) as ApiErrorResponse | null;
+      const detail =
+        typeof payload?.detail === 'string'
+          ? payload.detail
+          : typeof payload?.message === 'string'
+            ? payload.message
+            : typeof payload?.title === 'string'
+              ? payload.title
+              : typeof payload?.error === 'string'
+                ? payload.error
+                : '';
+      if (detail.trim().length > 0) {
+        return detail;
+      }
+    } catch {
+      // Fall back to static message if response body isn't parseable.
+    }
+  }
+  try {
+    const text = (await response.text()).trim();
+    if (text.length > 0) {
+      return text;
+    }
+  } catch {
+    // Ignore text body parsing errors and return fallback.
+  }
+  return fallback;
+}
+
 async function withAuthFetch(path: string, options: RequestInit = {}) {
   const token = await getToken();
   const buildHeaders = (currentToken: string | null, originalHeaders?: HeadersInit): HeadersInit => ({
@@ -118,7 +158,7 @@ async function withAuthFetch(path: string, options: RequestInit = {}) {
     headers: buildHeaders(token, options.headers),
   });
 
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     try {
       const newAccessToken = await refreshAccessToken();
       response = await fetch(`${API_BASE_URL}${path}`, {
@@ -129,7 +169,7 @@ async function withAuthFetch(path: string, options: RequestInit = {}) {
       await clearToken();
       throw new Error('AUTH_EXPIRED');
     }
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       await clearToken();
       throw new Error('AUTH_EXPIRED');
     }
@@ -154,7 +194,7 @@ export async function registerUser(payload: {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to register.');
+    throw new Error(await extractErrorMessage(response, 'Failed to register.'));
   }
 }
 
@@ -189,7 +229,7 @@ export async function fetchDates(
   const response = await withAuthFetch(`/dates?${params.toString()}`);
 
   if (!response.ok) {
-    throw new Error('Failed to load dates.');
+    throw new Error(await extractErrorMessage(response, 'Failed to load dates.'));
   }
 
   const data = await response.json();
@@ -210,7 +250,7 @@ export async function fetchDateById(id: string): Promise<DateDetails> {
   const response = await withAuthFetch(`/dates/${id}`);
 
   if (!response.ok) {
-    throw new Error('Failed to load date.');
+    throw new Error(await extractErrorMessage(response, 'Failed to load date.'));
   }
 
   return response.json();
@@ -233,7 +273,7 @@ export async function createDate(payload: {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to create date.');
+    throw new Error(await extractErrorMessage(response, 'Failed to create date.'));
   }
 
   const data = await response.json();
@@ -260,7 +300,7 @@ export async function updateDate(
   });
 
   if (!response.ok) {
-    throw new Error('Failed to update date.');
+    throw new Error(await extractErrorMessage(response, 'Failed to update date.'));
   }
 
   return response.json();
@@ -272,7 +312,7 @@ export async function deleteDate(dateId: string): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to delete date.');
+    throw new Error(await extractErrorMessage(response, 'Failed to delete date.'));
   }
 }
 
@@ -294,7 +334,7 @@ export async function fetchProfile(): Promise<UserProfile> {
   const response = await withAuthFetch('/users');
 
   if (!response.ok) {
-    throw new Error('Failed to load profile.');
+    throw new Error(await extractErrorMessage(response, 'Failed to load profile.'));
   }
 
   return response.json();
@@ -320,7 +360,7 @@ export async function updateProfile(payload: {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to update profile.');
+    throw new Error(await extractErrorMessage(response, 'Failed to update profile.'));
   }
 
   return response.json();
@@ -335,7 +375,7 @@ export async function updatePushToken(pushToken: string | null): Promise<void> {
     body: JSON.stringify({ pushToken }),
   });
   if (!response.ok) {
-    throw new Error('Failed to update push token.');
+    throw new Error(await extractErrorMessage(response, 'Failed to update push token.'));
   }
 }
 
@@ -349,7 +389,7 @@ export async function fetchDateImages(dateId: string): Promise<DateImage[]> {
   const response = await withAuthFetch(`/dates/${dateId}/images`);
 
   if (!response.ok) {
-    throw new Error('Failed to load date images.');
+    throw new Error(await extractErrorMessage(response, 'Failed to load date images.'));
   }
 
   const data = await response.json();
@@ -372,7 +412,7 @@ export async function uploadDateImages(dateId: string, images: Array<{ uri: stri
   });
 
   if (!response.ok) {
-    throw new Error('Failed to upload date images.');
+    throw new Error(await extractErrorMessage(response, 'Failed to upload date images.'));
   }
 }
 
@@ -382,7 +422,7 @@ export async function deleteDateImage(dateId: string, imageId: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to delete date image.');
+    throw new Error(await extractErrorMessage(response, 'Failed to delete date image.'));
   }
 }
 
@@ -404,7 +444,7 @@ export async function fetchProfileImages(): Promise<ProfileImage[]> {
   const response = await withAuthFetch('/users/images');
 
   if (!response.ok) {
-    throw new Error('Failed to load profile images.');
+    throw new Error(await extractErrorMessage(response, 'Failed to load profile images.'));
   }
 
   const data = await response.json();
@@ -415,7 +455,7 @@ export async function fetchPublicProfile(userId: string): Promise<PublicProfile>
   const response = await withAuthFetch(`/users/${userId}/public-profile`);
 
   if (!response.ok) {
-    throw new Error('Failed to load public profile.');
+    throw new Error(await extractErrorMessage(response, 'Failed to load public profile.'));
   }
 
   return response.json();
@@ -437,7 +477,7 @@ export async function uploadProfileImages(images: Array<{ uri: string; type: str
   });
 
   if (!response.ok) {
-    throw new Error('Failed to upload profile images.');
+    throw new Error(await extractErrorMessage(response, 'Failed to upload profile images.'));
   }
 }
 
@@ -447,7 +487,7 @@ export async function deleteProfileImage(imageId: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to delete profile image.');
+    throw new Error(await extractErrorMessage(response, 'Failed to delete profile image.'));
   }
 }
 
@@ -470,7 +510,7 @@ export async function fetchAttendeeStatus(dateId: string) {
   const response = await withAuthFetch(`/dates/${dateId}/attendees/status`);
 
   if (!response.ok) {
-    throw new Error('Failed to load attendee status.');
+    throw new Error(await extractErrorMessage(response, 'Failed to load attendee status.'));
   }
 
   return response.json();
@@ -482,7 +522,7 @@ export async function requestToJoinDate(dateId: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to request to join.');
+    throw new Error(await extractErrorMessage(response, 'Failed to request to join.'));
   }
 }
 
@@ -492,7 +532,7 @@ export async function cancelJoinRequest(dateId: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to cancel request.');
+    throw new Error(await extractErrorMessage(response, 'Failed to cancel request.'));
   }
 }
 
@@ -500,7 +540,7 @@ export async function fetchAttendeeRequests(dateId: string): Promise<AttendeeReq
   const response = await withAuthFetch(`/dates/${dateId}/attendees`);
 
   if (!response.ok) {
-    throw new Error('Failed to load attendee requests.');
+    throw new Error(await extractErrorMessage(response, 'Failed to load attendee requests.'));
   }
 
   const data = await response.json();
@@ -513,7 +553,7 @@ export async function acceptAttendee(dateId: string, userId: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to accept attendee.');
+    throw new Error(await extractErrorMessage(response, 'Failed to accept attendee.'));
   }
 }
 
@@ -523,14 +563,14 @@ export async function rejectAttendee(dateId: string, userId: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to reject attendee.');
+    throw new Error(await extractErrorMessage(response, 'Failed to reject attendee.'));
   }
 }
 
 export async function fetchDateChatMessages(dateId: string): Promise<DateChatMessage[]> {
   const response = await withAuthFetch(`/dates/${dateId}/chat/messages`);
   if (!response.ok) {
-    throw new Error('Failed to load chat messages.');
+    throw new Error(await extractErrorMessage(response, 'Failed to load chat messages.'));
   }
   const data = (await response.json()) as { messages?: DateChatMessage[] };
   return data.messages ?? [];
@@ -545,7 +585,7 @@ export async function sendDateChatMessage(dateId: string, message: string): Prom
     body: JSON.stringify({ message }),
   });
   if (!response.ok) {
-    throw new Error('Failed to send message.');
+    throw new Error(await extractErrorMessage(response, 'Failed to send message.'));
   }
   return response.json();
 }

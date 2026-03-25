@@ -11,6 +11,12 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const warnInDev = (...args: unknown[]) => {
+  if (__DEV__) {
+    console.warn(...args);
+  }
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
 
@@ -33,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await updatePushToken(pushToken);
       return;
     }
-    console.warn('Push token not available after registration.', 'Will retry on app foreground.');
+    warnInDev('Push token not available after registration.', 'Will retry on app foreground.');
   }, []);
 
   useEffect(() => {
@@ -48,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         // Keep auth flow resilient even if push registration fails, but log for diagnosis.
-        console.warn('Push registration/update failed:', error);
+        warnInDev('Push registration/update failed:', error);
       }
     };
     registerPush();
@@ -66,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       void tryRegisterPush().catch((error) => {
-        console.warn('Push retry on foreground failed:', error);
+        warnInDev('Push retry on foreground failed:', error);
       });
     });
     return () => subscription.remove();

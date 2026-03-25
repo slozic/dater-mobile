@@ -16,7 +16,14 @@ const resolveHost = (): string | null => {
 };
 
 const defaultHost = resolveHost();
+const devFallbackApiUrl = defaultHost ? `http://${defaultHost}:8080` : 'http://10.0.2.2:8080';
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+const normalizedConfiguredApiUrl = configuredApiUrl
+  ? configuredApiUrl.replace(/\/+$/, '')
+  : null;
 
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (defaultHost ? `http://${defaultHost}:8080` : 'http://10.0.2.2:8080');
+if (!normalizedConfiguredApiUrl && !__DEV__) {
+  throw new Error('EXPO_PUBLIC_API_URL must be set for non-development builds.');
+}
+
+export const API_BASE_URL = normalizedConfiguredApiUrl ?? devFallbackApiUrl;

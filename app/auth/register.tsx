@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { AppColors } from '@/constants/app';
 import { registerUser } from '@/lib/api';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
-const ACCENT = '#ff5c8a';
+const ACCENT = AppColors.accent;
+const MIN_PASSWORD_LENGTH = 8;
+const SIMPLE_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -49,16 +52,33 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     setSubmitted(true);
+    const normalizedForm = {
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      username: form.username.trim(),
+      password: form.password.trim(),
+      email: form.email.trim(),
+      birthday: form.birthday.trim(),
+      gender: form.gender.trim(),
+    };
     const requiredMissing =
-      !form.firstName.trim() ||
-      !form.lastName.trim() ||
-      !form.username.trim() ||
-      !form.password.trim() ||
-      !form.email.trim() ||
-      !form.birthday.trim() ||
-      !form.gender.trim();
+      !normalizedForm.firstName ||
+      !normalizedForm.lastName ||
+      !normalizedForm.username ||
+      !normalizedForm.password ||
+      !normalizedForm.email ||
+      !normalizedForm.birthday ||
+      !normalizedForm.gender;
     if (requiredMissing) {
       setError('Please fill all required fields, including gender.');
+      return;
+    }
+    if (!SIMPLE_EMAIL_PATTERN.test(normalizedForm.email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (normalizedForm.password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`);
       return;
     }
 
@@ -66,7 +86,7 @@ export default function RegisterScreen() {
     setSuccess('');
     setLoading(true);
     try {
-      await registerUser(form);
+      await registerUser(normalizedForm);
       setSuccess('Registration successful. You can login now.');
       setTimeout(() => router.back(), 800);
     } catch (err) {
@@ -77,7 +97,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <Text style={styles.title}>Create account</Text>
       <View style={styles.card}>
         <TextInput
