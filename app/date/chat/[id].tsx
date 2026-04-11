@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -20,6 +22,8 @@ import { AppColors, ChatLimits } from '@/constants/app';
 import { DateChatMessage, fetchDateById, fetchDateChatMessages, fetchProfile, sendDateChatMessage } from '@/lib/api';
 
 const ACCENT = AppColors.accent;
+const CHAT_POLL_INTERVAL_MS = 4000;
+const BOTTOM_PROXIMITY_THRESHOLD = 48;
 
 export default function DateChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -32,22 +36,79 @@ export default function DateChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [unseenNewCount, setUnseenNewCount] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const messagesScrollRef = useRef<ScrollView>(null);
-  const initialScrollDoneRef = useRef(false);
+  const isNearBottomRef = useRef(true);
+  const previousLastMessageIdRef = useRef<string | null>(null);
+  const didInitialLoadRef = useRef(false);
+  const unseenNewCountRef = useRef(0);
+
+  useEffect(() => {
+    unseenNewCountRef.current = unseenNewCount;
+  }, [unseenNewCount]);
+
+  const scrollToLatest = useCallback((animated: boolean) => {
+    isNearBottomRef.current = true;
+    requestAnimationFrame(() => {
+      messagesScrollRef.current?.scrollToEnd({ animated });
+    });
+  }, []);
+
+  const updateNearBottomState = useCallback((nativeEvent: NativeScrollEvent) => {
+    const distanceFromBottom =
+      nativeEvent.contentSize.height - nativeEvent.layoutMeasurement.height - nativeEvent.contentOffset.y;
+    const isNearBottom = distanceFromBottom <= BOTTOM_PROXIMITY_THRESHOLD;
+    isNearBottomRef.current = isNearBottom;
+    if (isNearBottom && unseenNewCountRef.current > 0) {
+      setUnseenNewCount(0);
+    }
+  }, []);
+
+  const handleMessagesScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      updateNearBottomState(event.nativeEvent);
+    },
+    [updateNearBottomState],
+  );
 
   const loadMessages = useCallback(async () => {
     if (!id) return;
     try {
       const list = await fetchDateChatMessages(id);
+      const nextLastMessageId = list.length > 0 ? list[list.length - 1].id : null;
+      const previousLastMessageId = previousLastMessageIdRef.current;
+      const hasNewMessages =
+        didInitialLoadRef.current &&
+        nextLastMessageId !== previousLastMessageId &&
+        nextLastMessageId !== null;
+
       setMessages(list);
+      if (!didInitialLoadRef.current) {
+        didInitialLoadRef.current = true;
+        setUnseenNewCount(0);
+        scrollToLatest(false);
+      } else if (hasNewMessages) {
+        if (isNearBottomRef.current) {
+          setUnseenNewCount(0);
+          scrollToLatest(true);
+        } else {
+          const previousLastIndex = previousLastMessageId
+            ? list.findIndex((message) => message.id === previousLastMessageId)
+            : -1;
+          const newlyArrivedCount =
+            previousLastIndex >= 0 ? list.length - previousLastIndex - 1 : list.length;
+          setUnseenNewCount((current) => current + Math.max(newlyArrivedCount, 1));
+        }
+      }
+      previousLastMessageIdRef.current = nextLastMessageId;
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load chat messages.');
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, scrollToLatest]);
 
   useEffect(() => {
     fetchProfile()
@@ -79,11 +140,14 @@ export default function DateChatScreen() {
   useFocusEffect(
     useCallback(() => {
       let timer: ReturnType<typeof setInterval> | null = null;
-      initialScrollDoneRef.current = false;
+      didInitialLoadRef.current = false;
+      previousLastMessageIdRef.current = null;
+      isNearBottomRef.current = true;
+      setUnseenNewCount(0);
       loadMessages();
       timer = setInterval(() => {
         loadMessages();
-      }, 4000);
+      }, CHAT_POLL_INTERVAL_MS);
       return () => {
         if (timer) clearInterval(timer);
       };
@@ -117,9 +181,8 @@ export default function DateChatScreen() {
       await sendDateChatMessage(id, message);
       setDraft('');
       await loadMessages();
-      requestAnimationFrame(() => {
-        messagesScrollRef.current?.scrollToEnd({ animated: true });
-      });
+      setUnseenNewCount(0);
+      scrollToLatest(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message.');
     } finally {
@@ -141,15 +204,11 @@ export default function DateChatScreen() {
           style={styles.messages}
           contentContainerStyle={styles.messagesContent}
           keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() => {
-            if (initialScrollDoneRef.current || messages.length === 0) {
-              return;
-            }
-            requestAnimationFrame(() => {
-              messagesScrollRef.current?.scrollToEnd({ animated: false });
-              initialScrollDoneRef.current = true;
-            });
-          }}
+          showsVerticalScrollIndicator
+          persistentScrollbar={Platform.OS === 'android'}
+          indicatorStyle={Platform.OS === 'ios' ? 'black' : undefined}
+          onScroll={handleMessagesScroll}
+          scrollEventThrottle={16}
         >
           {messages.length === 0 ? <Text style={styles.emptyText}>No messages yet.</Text> : null}
           {messages.map((message) => {
@@ -176,15 +235,35 @@ export default function DateChatScreen() {
             );
           })}
         </ScrollView>
+        {unseenNewCount > 0 ? (
+          <Pressable
+            onPress={() => {
+              setUnseenNewCount(0);
+              scrollToLatest(true);
+            }}
+            style={[
+              styles.newMessagesButton,
+              Platform.OS === 'android' && keyboardHeight > 0 ? { bottom: keyboardHeight + 76 } : null,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Jump to latest chat messages"
+            accessibilityHint="Scroll to the newest unseen messages"
+          >
+            <View style={styles.newMessagesButtonContent}>
+              <MaterialIcons name="keyboard-arrow-down" size={16} color="#fff" />
+              <Text style={styles.newMessagesButtonText}>
+                {unseenNewCount === 1 ? '1 new' : `${unseenNewCount} new`}
+              </Text>
+            </View>
+          </Pressable>
+        ) : null}
         <View style={[styles.composerRow, Platform.OS === 'android' && keyboardHeight > 0 ? { marginBottom: keyboardHeight } : null]}>
           <TextInput
             style={styles.input}
             value={draft}
             onChangeText={setDraft}
             onFocus={() => {
-              requestAnimationFrame(() => {
-                messagesScrollRef.current?.scrollToEnd({ animated: true });
-              });
+              scrollToLatest(true);
             }}
             placeholder="Type a message..."
             placeholderTextColor="#888"
@@ -213,7 +292,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f7f7fb',
-    paddingHorizontal: 16,
     paddingTop: 0,
   },
   headerDateChip: {
@@ -233,6 +311,7 @@ const styles = StyleSheet.create({
   error: {
     color: '#b00020',
     marginBottom: 8,
+    marginHorizontal: 16,
   },
   messages: {
     flex: 1,
@@ -240,6 +319,7 @@ const styles = StyleSheet.create({
   messagesContent: {
     gap: 8,
     paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   emptyText: {
     color: '#6b6b73',
@@ -298,6 +378,28 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 8,
     paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  newMessagesButton: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: 76,
+    borderRadius: 14,
+    backgroundColor: '#6b6b73',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    zIndex: 20,
+    elevation: 4,
+  },
+  newMessagesButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  newMessagesButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 12,
   },
   input: {
     flex: 1,

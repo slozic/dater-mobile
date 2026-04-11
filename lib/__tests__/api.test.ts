@@ -14,7 +14,7 @@ jest.mock('../config', () => ({
   API_BASE_URL: 'http://api.test',
 }));
 
-import { fetchDateById, fetchProfile } from '../api';
+import { blockUser, fetchDateById, fetchProfile, reportAndBlockUser, reportUser } from '../api';
 
 type MockResponseOptions = {
   status: number;
@@ -108,5 +108,57 @@ describe('lib/api auth + error handling', () => {
     );
 
     await expect(fetchDateById('date-1')).rejects.toThrow('Plain text backend validation error');
+  });
+
+  test('sends report payload and returns moderation response', async () => {
+    (global.fetch as unknown as jest.Mock).mockResolvedValueOnce(
+      createMockResponse({
+        status: 200,
+        jsonBody: {
+          userId: 'u2',
+          reported: true,
+          blocked: false,
+        },
+      }),
+    );
+
+    await expect(reportUser('u2', { reason: 'SPAM', note: 'Spam profile links' })).resolves.toEqual({
+      userId: 'u2',
+      reported: true,
+      blocked: false,
+    });
+    expect((global.fetch as unknown as jest.Mock).mock.calls[0][0]).toBe('http://api.test/users/u2/moderation/report');
+  });
+
+  test('blocks and report+block users through dedicated endpoints', async () => {
+    (global.fetch as unknown as jest.Mock)
+      .mockResolvedValueOnce(
+        createMockResponse({
+          status: 200,
+          jsonBody: { userId: 'u3', reported: false, blocked: true },
+        }),
+      )
+      .mockResolvedValueOnce(
+        createMockResponse({
+          status: 200,
+          jsonBody: { userId: 'u4', reported: true, blocked: true },
+        }),
+      );
+
+    await expect(blockUser('u3')).resolves.toEqual({
+      userId: 'u3',
+      reported: false,
+      blocked: true,
+    });
+    await expect(reportAndBlockUser('u4', { reason: 'HARASSMENT' })).resolves.toEqual({
+      userId: 'u4',
+      reported: true,
+      blocked: true,
+    });
+
+    expect((global.fetch as unknown as jest.Mock).mock.calls[0][0]).toBe('http://api.test/users/u3/moderation/block');
+    expect((global.fetch as unknown as jest.Mock).mock.calls[1][0]).toBe(
+      'http://api.test/users/u4/moderation/report-and-block',
+    );
   });
 });

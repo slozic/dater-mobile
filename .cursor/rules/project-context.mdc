@@ -32,7 +32,9 @@ alwaysApply: true
 ## Coordination with backend
 - Keep notification-type enums and payload expectations in sync with backend.
 - Keep profile/notification preference fields aligned with backend DTOs.
+- Keep moderation reason enums (`SPAM`, `HARASSMENT`, `INAPPROPRIATE`, `IMPERSONATION`, `OTHER`) aligned with backend.
+- Treat backend 403 responses from strict block enforcement as user-facing constraints (not auth-expiry/logout paths).
 
 ## Current backlog (high level)
-- Report/block users.
+- Revisit `My Dates` UX redesign (5-tile filter row: All/Created/Requested/Accepted/Past) before implementing.
 - Final UI polish pass.

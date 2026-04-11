@@ -1,8 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { fetchPublicProfile, PublicProfile } from '@/lib/api';
+import {
+  blockUser,
+  fetchPublicProfile,
+  PublicProfile,
+  reportAndBlockUser,
+  reportUser,
+  ReportUserReason,
+} from '@/lib/api';
+
+const REPORT_REASON_OPTIONS: { value: ReportUserReason; label: string }[] = [
+  { value: 'HARASSMENT', label: 'Harassment' },
+  { value: 'SPAM', label: 'Spam' },
+  { value: 'INAPPROPRIATE', label: 'Inappropriate' },
+  { value: 'IMPERSONATION', label: 'Impersonation' },
+  { value: 'OTHER', label: 'Other' },
+];
 
 export default function PublicProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -10,6 +25,13 @@ export default function PublicProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [moderationError, setModerationError] = useState('');
+  const [moderationSuccess, setModerationSuccess] = useState('');
+  const [moderationLoading, setModerationLoading] = useState<'report' | 'block' | 'reportAndBlock' | null>(null);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [pendingReportAction, setPendingReportAction] = useState<'report' | 'reportAndBlock' | null>(null);
+  const [selectedReason, setSelectedReason] = useState<ReportUserReason>('HARASSMENT');
+  const [reportNote, setReportNote] = useState('');
 
   useEffect(() => {
     if (!id) {
@@ -22,6 +44,74 @@ export default function PublicProfileScreen() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load profile.'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const handleBlockUser = () => {
+    if (!id || moderationLoading) {
+      return;
+    }
+    Alert.alert(
+      'Block user',
+      'You will no longer be able to interact with this user.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            setModerationError('');
+            setModerationSuccess('');
+            setModerationLoading('block');
+            try {
+              await blockUser(id);
+              setModerationSuccess('User blocked successfully.');
+            } catch (err) {
+              setModerationError(err instanceof Error ? err.message : 'Failed to block user.');
+            } finally {
+              setModerationLoading(null);
+            }
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+  };
+
+  const openReportModal = (action: 'report' | 'reportAndBlock') => {
+    if (!id || moderationLoading) {
+      return;
+    }
+    setModerationError('');
+    setModerationSuccess('');
+    setPendingReportAction(action);
+    setReportModalVisible(true);
+  };
+
+  const submitReportAction = async () => {
+    if (!id || !pendingReportAction || moderationLoading) {
+      return;
+    }
+    const note = reportNote.trim();
+    setModerationError('');
+    setModerationSuccess('');
+    setModerationLoading(pendingReportAction);
+    try {
+      if (pendingReportAction === 'report') {
+        await reportUser(id, { reason: selectedReason, note: note.length > 0 ? note : undefined });
+        setModerationSuccess('User reported successfully.');
+      } else {
+        await reportAndBlockUser(id, { reason: selectedReason, note: note.length > 0 ? note : undefined });
+        setModerationSuccess('User reported and blocked successfully.');
+      }
+      setReportModalVisible(false);
+      setPendingReportAction(null);
+      setReportNote('');
+      setSelectedReason('HARASSMENT');
+    } catch (err) {
+      setModerationError(err instanceof Error ? err.message : 'Failed to submit moderation action.');
+    } finally {
+      setModerationLoading(null);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
@@ -36,6 +126,34 @@ export default function PublicProfileScreen() {
             <Text style={styles.value}>{profile.username}</Text>
             <Text style={styles.label}>Gender</Text>
             <Text style={styles.value}>{profile.gender ?? '-'}</Text>
+            <Text style={styles.label}>Safety</Text>
+            <View style={styles.moderationRow}>
+              <Pressable
+                style={[styles.moderationTile, styles.reportTile, moderationLoading ? styles.disabledTile : null]}
+                onPress={() => openReportModal('report')}
+                disabled={Boolean(moderationLoading)}
+              >
+                <Text style={styles.moderationTileText}>Report user</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.moderationTile, styles.blockTile, moderationLoading ? styles.disabledTile : null]}
+                onPress={handleBlockUser}
+                disabled={Boolean(moderationLoading)}
+              >
+                <Text style={styles.moderationTileText}>
+                  {moderationLoading === 'block' ? 'Blocking...' : 'Block user'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.moderationTile, styles.reportBlockTile, moderationLoading ? styles.disabledTile : null]}
+                onPress={() => openReportModal('reportAndBlock')}
+                disabled={Boolean(moderationLoading)}
+              >
+                <Text style={styles.moderationTileText}>Report + block</Text>
+              </Pressable>
+            </View>
+            {moderationError ? <Text style={styles.error}>{moderationError}</Text> : null}
+            {moderationSuccess ? <Text style={styles.success}>{moderationSuccess}</Text> : null}
             <Text style={styles.label}>Photos</Text>
             <View style={styles.imageRow}>
               {profile.profileImageData?.length ? (
@@ -58,6 +176,81 @@ export default function PublicProfileScreen() {
           <Pressable style={styles.modalClose} onPress={() => setPreviewImage(null)}>
             <Text style={styles.modalCloseText}>Close</Text>
           </Pressable>
+        </View>
+      </Modal>
+      <Modal
+        visible={reportModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!moderationLoading) {
+            setReportModalVisible(false);
+          }
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              if (!moderationLoading) {
+                setReportModalVisible(false);
+              }
+            }}
+          />
+          <View style={styles.reportModalCard}>
+            <Text style={styles.reportModalTitle}>
+              {pendingReportAction === 'reportAndBlock' ? 'Report and block user' : 'Report user'}
+            </Text>
+            <Text style={styles.reportModalSubtitle}>Choose a reason:</Text>
+            <View style={styles.reasonGrid}>
+              {REPORT_REASON_OPTIONS.map((option) => (
+                <Pressable
+                  key={option.value}
+                  style={[
+                    styles.reasonChip,
+                    selectedReason === option.value ? styles.reasonChipSelected : null,
+                  ]}
+                  onPress={() => setSelectedReason(option.value)}
+                >
+                  <Text
+                    style={[
+                      styles.reasonChipText,
+                      selectedReason === option.value ? styles.reasonChipTextSelected : null,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              style={styles.reportNoteInput}
+              value={reportNote}
+              onChangeText={setReportNote}
+              placeholder="Optional details"
+              placeholderTextColor="#888"
+              maxLength={300}
+              multiline
+            />
+            <View style={styles.reportModalActions}>
+              <Pressable
+                style={[styles.modalActionButton, styles.modalCancelButton]}
+                onPress={() => setReportModalVisible(false)}
+                disabled={Boolean(moderationLoading)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalActionButton, styles.modalSubmitButton, moderationLoading ? styles.disabledTile : null]}
+                onPress={submitReportAction}
+                disabled={Boolean(moderationLoading)}
+              >
+                <Text style={styles.modalSubmitText}>
+                  {moderationLoading === 'report' || moderationLoading === 'reportAndBlock' ? 'Submitting...' : 'Submit'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -100,6 +293,37 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#6b6b73',
   },
+  success: {
+    color: '#0a7f42',
+    marginTop: 4,
+  },
+  moderationRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  moderationTile: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  reportTile: {
+    backgroundColor: '#fff2cc',
+  },
+  blockTile: {
+    backgroundColor: '#fddede',
+  },
+  reportBlockTile: {
+    backgroundColor: '#ffe5ef',
+  },
+  moderationTileText: {
+    color: '#1b1b1f',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  disabledTile: {
+    opacity: 0.6,
+  },
   imageRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -133,6 +357,79 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     color: '#1b1b1f',
+    fontWeight: '600',
+  },
+  reportModalCard: {
+    width: '100%',
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    padding: 16,
+    gap: 12,
+  },
+  reportModalTitle: {
+    color: '#1b1b1f',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  reportModalSubtitle: {
+    color: '#6b6b73',
+    fontSize: 13,
+  },
+  reasonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  reasonChip: {
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f1f1f5',
+  },
+  reasonChipSelected: {
+    backgroundColor: '#ffd8e8',
+  },
+  reasonChipText: {
+    color: '#333',
+    fontWeight: '500',
+  },
+  reasonChipTextSelected: {
+    color: '#7a2044',
+    fontWeight: '700',
+  },
+  reportNoteInput: {
+    minHeight: 70,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#d7d7e0',
+    backgroundColor: '#fff',
+    color: '#111',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    textAlignVertical: 'top',
+  },
+  reportModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  modalActionButton: {
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  modalCancelButton: {
+    backgroundColor: '#f1f1f5',
+  },
+  modalSubmitButton: {
+    backgroundColor: '#7a2044',
+  },
+  modalCancelText: {
+    color: '#1b1b1f',
+    fontWeight: '600',
+  },
+  modalSubmitText: {
+    color: '#fff',
     fontWeight: '600',
   },
 });

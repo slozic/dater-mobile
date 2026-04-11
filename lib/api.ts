@@ -440,6 +440,19 @@ export type PublicProfile = {
   profileImageData?: ProfileImage[];
 };
 
+export type ReportUserReason =
+  | 'SPAM'
+  | 'HARASSMENT'
+  | 'INAPPROPRIATE'
+  | 'IMPERSONATION'
+  | 'OTHER';
+
+export type UserModerationActionResponse = {
+  userId: string;
+  reported: boolean;
+  blocked: boolean;
+};
+
 export async function fetchProfileImages(): Promise<ProfileImage[]> {
   const response = await withAuthFetch('/users/images');
 
@@ -458,6 +471,50 @@ export async function fetchPublicProfile(userId: string): Promise<PublicProfile>
     throw new Error(await extractErrorMessage(response, 'Failed to load public profile.'));
   }
 
+  return response.json();
+}
+
+export async function reportUser(
+  userId: string,
+  payload: { reason: ReportUserReason; note?: string | null },
+): Promise<UserModerationActionResponse> {
+  const response = await withAuthFetch(`/users/${userId}/moderation/report`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response, 'Failed to report user.'));
+  }
+  return response.json();
+}
+
+export async function blockUser(userId: string): Promise<UserModerationActionResponse> {
+  const response = await withAuthFetch(`/users/${userId}/moderation/block`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response, 'Failed to block user.'));
+  }
+  return response.json();
+}
+
+export async function reportAndBlockUser(
+  userId: string,
+  payload: { reason: ReportUserReason; note?: string | null },
+): Promise<UserModerationActionResponse> {
+  const response = await withAuthFetch(`/users/${userId}/moderation/report-and-block`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response, 'Failed to report and block user.'));
+  }
   return response.json();
 }
 

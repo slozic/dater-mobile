@@ -138,6 +138,27 @@ This section tracks the strict review follow-up implementation done directly in 
 - `npm run lint` -> pass.
 - `npm test -- --runInBand` -> pass (`2` suites, `6` tests).
 
+## 2026-04-11 Moderation rollout (report/block)
+
+### Implemented now
+
+- Added public-profile moderation UX in `app/user/[id].tsx` with three separate actions:
+  - `Report user`
+  - `Block user`
+  - `Report + block user`
+- Added report modal flow with explicit reason selection and optional note for report-based actions.
+- Added moderation API methods in `lib/api.ts`:
+  - `reportUser(...)`
+  - `blockUser(...)`
+  - `reportAndBlockUser(...)`
+- Added mobile API regression coverage in `lib/__tests__/api.test.ts` for moderation endpoints and payload behavior.
+- Aligned mobile behavior with strict backend block enforcement (blocked relationships now surface backend 403 detail for profile/date/chat interactions).
+
+### Verification
+
+- `npm run lint` -> pass.
+- `npm test -- --runInBand` -> pass (`2` suites, `8` tests).
+
 ## Remaining useful follow-ups
 
 These are intentionally deferred and can be resumed later:
@@ -147,6 +168,6 @@ These are intentionally deferred and can be resumed later:
 - Extend accessibility coverage to all interactive controls/screens, not only the critical ones touched in this pass.
 - Add broader UI/component tests beyond auth/API baseline tests.
 - Product backlog:
-  - report/block users,
+  - redesign `My Dates` filter switching: replace repetitive options-button flow with 5 rectangular tiles (`All`, `Created`, `Requested`, `Accepted`, `Past`) below the title; revisit with best redesign options before implementation,
   - final full UI polish pass across remaining screens.
 
