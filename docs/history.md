@@ -159,6 +159,26 @@ This section tracks the strict review follow-up implementation done directly in 
 - `npm run lint` -> pass.
 - `npm test -- --runInBand` -> pass (`2` suites, `8` tests).
 
+## 2026-04-12 Moderation and chat UX follow-up (Mobile)
+
+### Implemented now
+
+- Aligned moderation note length with backend contract:
+  - added shared `REPORT_USER_NOTE_MAX_LENGTH` in `lib/api.ts`,
+  - updated public-profile moderation note input to use that shared limit.
+- Added accessibility metadata for moderation interactions in `app/user/[id].tsx`:
+  - moderation action tiles (`Report`, `Block`, `Report + block`),
+  - report reason chips,
+  - report note input,
+  - modal cancel/submit actions.
+- Added chat unseen-message badge cap in `app/date/chat/[id].tsx`:
+  - display now uses `99+ new` style cap while preserving exact internal unseen count.
+
+### Verification
+
+- `npm run test -- lib/__tests__/api.test.ts --runInBand` -> pass (`1` suite, `6` tests).
+- `npm run lint` -> pass.
+
 ## Remaining useful follow-ups
 
 These are intentionally deferred and can be resumed later:

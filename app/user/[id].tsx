@@ -6,6 +6,7 @@ import {
   blockUser,
   fetchPublicProfile,
   PublicProfile,
+  REPORT_USER_NOTE_MAX_LENGTH,
   reportAndBlockUser,
   reportUser,
   ReportUserReason,
@@ -132,6 +133,9 @@ export default function PublicProfileScreen() {
                 style={[styles.moderationTile, styles.reportTile, moderationLoading ? styles.disabledTile : null]}
                 onPress={() => openReportModal('report')}
                 disabled={Boolean(moderationLoading)}
+                accessibilityRole="button"
+                accessibilityLabel="Report this user"
+                accessibilityHint="Open report options without blocking"
               >
                 <Text style={styles.moderationTileText}>Report user</Text>
               </Pressable>
@@ -139,6 +143,9 @@ export default function PublicProfileScreen() {
                 style={[styles.moderationTile, styles.blockTile, moderationLoading ? styles.disabledTile : null]}
                 onPress={handleBlockUser}
                 disabled={Boolean(moderationLoading)}
+                accessibilityRole="button"
+                accessibilityLabel="Block this user"
+                accessibilityHint="Prevent future interactions with this user"
               >
                 <Text style={styles.moderationTileText}>
                   {moderationLoading === 'block' ? 'Blocking...' : 'Block user'}
@@ -148,6 +155,9 @@ export default function PublicProfileScreen() {
                 style={[styles.moderationTile, styles.reportBlockTile, moderationLoading ? styles.disabledTile : null]}
                 onPress={() => openReportModal('reportAndBlock')}
                 disabled={Boolean(moderationLoading)}
+                accessibilityRole="button"
+                accessibilityLabel="Report and block this user"
+                accessibilityHint="Report this user and prevent future interactions"
               >
                 <Text style={styles.moderationTileText}>Report + block</Text>
               </Pressable>
@@ -211,6 +221,9 @@ export default function PublicProfileScreen() {
                     selectedReason === option.value ? styles.reasonChipSelected : null,
                   ]}
                   onPress={() => setSelectedReason(option.value)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Report reason: ${option.label}`}
+                  accessibilityHint="Select report reason"
                 >
                   <Text
                     style={[
@@ -229,14 +242,19 @@ export default function PublicProfileScreen() {
               onChangeText={setReportNote}
               placeholder="Optional details"
               placeholderTextColor="#888"
-              maxLength={300}
+              maxLength={REPORT_USER_NOTE_MAX_LENGTH}
               multiline
+              accessibilityLabel="Report note"
+              accessibilityHint="Optional additional details for the report"
             />
             <View style={styles.reportModalActions}>
               <Pressable
                 style={[styles.modalActionButton, styles.modalCancelButton]}
                 onPress={() => setReportModalVisible(false)}
                 disabled={Boolean(moderationLoading)}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel report action"
+                accessibilityHint="Close this report dialog without submitting"
               >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </Pressable>
@@ -244,6 +262,9 @@ export default function PublicProfileScreen() {
                 style={[styles.modalActionButton, styles.modalSubmitButton, moderationLoading ? styles.disabledTile : null]}
                 onPress={submitReportAction}
                 disabled={Boolean(moderationLoading)}
+                accessibilityRole="button"
+                accessibilityLabel="Submit report action"
+                accessibilityHint="Send selected moderation action"
               >
                 <Text style={styles.modalSubmitText}>
                   {moderationLoading === 'report' || moderationLoading === 'reportAndBlock' ? 'Submitting...' : 'Submit'}

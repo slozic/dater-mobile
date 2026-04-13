@@ -24,6 +24,7 @@ import { DateChatMessage, fetchDateById, fetchDateChatMessages, fetchProfile, se
 const ACCENT = AppColors.accent;
 const CHAT_POLL_INTERVAL_MS = 4000;
 const BOTTOM_PROXIMITY_THRESHOLD = 48;
+const UNSEEN_BADGE_MAX_DISPLAY = 99;
 
 export default function DateChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -190,6 +191,13 @@ export default function DateChatScreen() {
     }
   };
 
+  const unseenNewLabel =
+    unseenNewCount > UNSEEN_BADGE_MAX_DISPLAY
+      ? `${UNSEEN_BADGE_MAX_DISPLAY}+ new`
+      : unseenNewCount === 1
+        ? '1 new'
+        : `${unseenNewCount} new`;
+
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <KeyboardAvoidingView
@@ -251,9 +259,7 @@ export default function DateChatScreen() {
           >
             <View style={styles.newMessagesButtonContent}>
               <MaterialIcons name="keyboard-arrow-down" size={16} color="#fff" />
-              <Text style={styles.newMessagesButtonText}>
-                {unseenNewCount === 1 ? '1 new' : `${unseenNewCount} new`}
-              </Text>
+              <Text style={styles.newMessagesButtonText}>{unseenNewLabel}</Text>
             </View>
           </Pressable>
         ) : null}

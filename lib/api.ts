@@ -447,6 +447,8 @@ export type ReportUserReason =
   | 'IMPERSONATION'
   | 'OTHER';
 
+export const REPORT_USER_NOTE_MAX_LENGTH = 1000;
+
 export type UserModerationActionResponse = {
   userId: string;
   reported: boolean;
